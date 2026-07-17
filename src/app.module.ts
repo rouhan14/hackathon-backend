@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { NotionModule } from './integrations/notion/notion.module';
 
 @Module({
-  imports: [],
+  imports: [NotionModule],
   controllers: [AppController],
   providers: [AppService],
 })
