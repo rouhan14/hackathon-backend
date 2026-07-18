@@ -76,6 +76,22 @@ export class ConnectionsService {
     return connection;
   }
 
+  async findActiveProviderCredential(userId: string, provider: ProviderName) {
+    const connection = await this.prisma.integrationConnection.findFirst({
+      where: {
+        userId,
+        provider,
+        status: ConnectionStatus.ACTIVE,
+        deletedAt: null,
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (!connection) {
+      throw new NotFoundException(`No active ${provider} connection found.`);
+    }
+    return connection;
+  }
+
   async save(input: SaveConnectionInput): Promise<SafeConnection> {
     return this.prisma.integrationConnection.upsert({
       where: {
