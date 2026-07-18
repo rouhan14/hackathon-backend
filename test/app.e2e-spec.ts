@@ -8,6 +8,9 @@ import { PrismaService } from './../src/prisma/prisma.service';
 process.env.JWT_SECRET ??= 'e2e-only-jwt-secret';
 process.env.DATABASE_URL ??=
   'postgresql://postgres:dev@localhost:5433/hackathon?schema=public';
+process.env.BEDROCK_API_KEY ??= 'e2e-only-bedrock-api-key';
+process.env.BEDROCK_BASE_URL ??= 'https://bedrock-mantle.us-east-1.api.aws/v1';
+process.env.BEDROCK_MODEL_ID ??= 'google.gemma-3-4b-it';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;

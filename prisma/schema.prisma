@@ -216,6 +216,7 @@ model IntegrationConnection {
   tokenExpiresAt        DateTime?
   grantedScopes         String[]
   credentialKeyVersion  Int              @default(1)
+  credentialGroupId     String?
   metadata              Json?
   lastSuccessfulSyncAt  DateTime?
   lastErrorCode         String?
@@ -233,6 +234,7 @@ model IntegrationConnection {
   @@unique([userId, provider, accountId])
   @@index([organizationId, userId, status])
   @@index([provider, status])
+  @@index([userId, provider, credentialGroupId])
 }
 
 model OAuthState {
@@ -243,6 +245,7 @@ model OAuthState {
   organizationId String
   redirectUri    String?
   codeVerifier   String?
+  metadata       Json?
   createdAt      DateTime     @default(now())
   expiresAt      DateTime
   consumedAt     DateTime?
