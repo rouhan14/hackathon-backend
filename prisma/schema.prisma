@@ -16,6 +16,7 @@ enum MembershipRole {
 
 enum ProviderName {
   NOTION          @map("notion")
+  SLACK           @map("slack")
   JIRA            @map("jira")
   CLICKUP         @map("clickup")
   GOOGLE_CALENDAR @map("google_calendar")
