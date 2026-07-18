@@ -2,13 +2,13 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import { UsersService } from '../users/users.service';
+import { SafeUserRecord, UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
 
 const BCRYPT_ROUNDS = 10;
 
-export type SafeUser = Omit<User, 'passwordHash'>;
+export type SafeUser = SafeUserRecord;
 export interface AuthResult {
   accessToken: string;
   user: SafeUser;
@@ -37,7 +37,7 @@ export class AuthService {
   }
 
   async login(dto: LoginDto): Promise<AuthResult> {
-    const user = await this.users.findByEmail(dto.email);
+    const user = await this.users.findByEmailWithCredentials(dto.email);
 
     // Same generic error whether the email is unknown or the password is wrong,
     // so we don't leak which accounts exist.
@@ -62,7 +62,12 @@ export class AuthService {
   }
 
   private toSafeUser(user: User): SafeUser {
-    const { passwordHash: _passwordHash, ...safe } = user;
-    return safe;
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
   }
 }

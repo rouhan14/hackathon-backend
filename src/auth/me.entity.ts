@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { ConnectionEntity } from '../integrations/connections/connection.entity';
+import { ConnectionEntity } from '../connections/connection.entity';
 
 /** Swagger response shape for GET /auth/me: the user plus their integrations. */
 export class MeEntity {

@@ -1,8 +1,4 @@
-import {
-  ExecutionContext,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
 /** Protects a route: requires a valid `Authorization: Bearer <token>` header. */
@@ -12,12 +8,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
    * Keep the 401 status but return a specific reason so the frontend can react
    * (e.g. refresh/re-login on expiry vs. hard error on a bad token).
    */
-  handleRequest<TUser>(
-    err: unknown,
-    user: TUser,
-    info: unknown,
-    _context: ExecutionContext,
-  ): TUser {
+  handleRequest<TUser>(err: unknown, user: TUser, info: unknown): TUser {
     if (err || !user) {
       throw new UnauthorizedException(this.reasonFrom(info, err));
     }

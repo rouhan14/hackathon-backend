@@ -1,23 +1,37 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ActionsModule } from './actions/actions.module';
+import { AgentsModule } from './agents/agents.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { AuthModule } from './auth/auth.module';
-import { NotionAuthModule } from './auth/notion/notion-auth.module';
-import { ConnectionsModule } from './integrations/connections/connections.module';
-import { NotionModule } from './integrations/notion/notion.module';
-import { PrismaModule } from './prisma/prisma.module';
-import { UsersModule } from './users/users.module';
+import { AssistantModule } from './assistant/assistant.module';
+import { AuditModule } from './audit/audit.module';
+import { ConnectionsModule } from './connections/connections.module';
+import { ContextModule } from './context/context.module';
+import { HealthModule } from './health/health.module';
+import { IdentityModule } from './identity/identity.module';
+import { InfrastructureModule } from './infrastructure/infrastructure.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { PolicyModule } from './policy/policy.module';
+import { ProvidersModule } from './providers/providers.module';
+import { SyncModule } from './sync/sync.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    PrismaModule,
-    UsersModule,
-    AuthModule,
+    InfrastructureModule,
+    IdentityModule,
     ConnectionsModule,
-    NotionModule,
-    NotionAuthModule,
+    ProvidersModule,
+    PolicyModule,
+    ContextModule,
+    SyncModule,
+    AssistantModule,
+    ActionsModule,
+    AgentsModule,
+    AuditModule,
+    NotificationsModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

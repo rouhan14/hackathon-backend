@@ -24,7 +24,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user) {
       throw new UnauthorizedException('User no longer exists.');
     }
-    const { passwordHash: _passwordHash, ...safe } = user;
-    return safe;
+    return user;
   }
 }

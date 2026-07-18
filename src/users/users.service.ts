@@ -3,44 +3,116 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, User } from '@prisma/client';
+import { MembershipRole, Prisma, User } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+
+export const safeUserSelect = {
+  id: true,
+  email: true,
+  name: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.UserSelect;
+
+export type SafeUserRecord = Prisma.UserGetPayload<{
+  select: typeof safeUserSelect;
+}>;
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateUserDto): Promise<User> {
-    try {
-      return await this.prisma.user.create({ data: dto });
-    } catch (error) {
-      if (this.isUniqueViolation(error)) {
-        throw new ConflictException(
-          `A user with email "${dto.email}" already exists.`,
-        );
-      }
-      throw error;
-    }
+  async create(dto: CreateUserDto): Promise<SafeUserRecord> {
+    const user = await this.createUserWithWorkspace(dto);
+    return this.toSafeUser(user);
   }
 
-  findAll(): Promise<User[]> {
-    return this.prisma.user.findMany({ orderBy: { createdAt: 'desc' } });
-  }
-
-  findByEmail(email: string): Promise<User | null> {
+  findByEmailWithCredentials(email: string): Promise<User | null> {
     return this.prisma.user.findUnique({ where: { email } });
   }
 
-  /** Create a user with a pre-hashed password (used by the auth/signup flow). */
   async createWithCredentials(data: {
     email: string;
     name?: string;
     passwordHash: string;
   }): Promise<User> {
+    return this.createUserWithWorkspace(data);
+  }
+
+  async findOne(id: string): Promise<SafeUserRecord> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: safeUserSelect,
+    });
+    if (!user) {
+      throw new NotFoundException(`User "${id}" not found.`);
+    }
+    return user;
+  }
+
+  async update(id: string, dto: UpdateUserDto): Promise<SafeUserRecord> {
     try {
-      return await this.prisma.user.create({ data });
+      return await this.prisma.user.update({
+        where: { id },
+        data: dto,
+        select: safeUserSelect,
+      });
+    } catch (error) {
+      if (this.isNotFound(error)) {
+        throw new NotFoundException(`User "${id}" not found.`);
+      }
+      if (this.isUniqueViolation(error)) {
+        throw new ConflictException('That email address is already in use.');
+      }
+      throw error;
+    }
+  }
+
+  async remove(id: string): Promise<void> {
+    try {
+      await this.prisma.user.delete({ where: { id } });
+    } catch (error) {
+      if (this.isNotFound(error)) {
+        throw new NotFoundException(`User "${id}" not found.`);
+      }
+      throw error;
+    }
+  }
+
+  private async createUserWithWorkspace(data: {
+    email: string;
+    name?: string;
+    passwordHash?: string;
+  }): Promise<User> {
+    const displayName = data.name?.trim() || data.email.split('@')[0];
+    const slugBase = displayName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 40);
+
+    try {
+      return await this.prisma.user.create({
+        data: {
+          email: data.email,
+          name: data.name,
+          passwordHash: data.passwordHash,
+          memberships: {
+            create: {
+              role: MembershipRole.OWNER,
+              organization: {
+                create: {
+                  name: `${displayName}'s Workspace`,
+                  slug: `${slugBase || 'workspace'}-${randomUUID().slice(0, 8)}`,
+                },
+              },
+            },
+          },
+        },
+      });
     } catch (error) {
       if (this.isUniqueViolation(error)) {
         throw new ConflictException(
@@ -51,42 +123,16 @@ export class UsersService {
     }
   }
 
-  async findOne(id: string): Promise<User> {
-    const user = await this.prisma.user.findUnique({ where: { id } });
-    if (!user) {
-      throw new NotFoundException(`User "${id}" not found.`);
-    }
-    return user;
+  private toSafeUser(user: User): SafeUserRecord {
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
   }
 
-  async update(id: string, dto: UpdateUserDto): Promise<User> {
-    try {
-      return await this.prisma.user.update({ where: { id }, data: dto });
-    } catch (error) {
-      if (this.isNotFound(error)) {
-        throw new NotFoundException(`User "${id}" not found.`);
-      }
-      if (this.isUniqueViolation(error)) {
-        throw new ConflictException(
-          `A user with email "${dto.email}" already exists.`,
-        );
-      }
-      throw error;
-    }
-  }
-
-  async remove(id: string): Promise<User> {
-    try {
-      return await this.prisma.user.delete({ where: { id } });
-    } catch (error) {
-      if (this.isNotFound(error)) {
-        throw new NotFoundException(`User "${id}" not found.`);
-      }
-      throw error;
-    }
-  }
-
-  /** Prisma "unique constraint failed". */
   private isUniqueViolation(error: unknown): boolean {
     return (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -94,7 +140,6 @@ export class UsersService {
     );
   }
 
-  /** Prisma "record to update/delete not found". */
   private isNotFound(error: unknown): boolean {
     return (
       error instanceof Prisma.PrismaClientKnownRequestError &&

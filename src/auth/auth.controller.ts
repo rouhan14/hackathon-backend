@@ -13,7 +13,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import { ConnectionsService } from '../integrations/connections/connections.service';
+import { ConnectionsService } from '../connections/connections.service';
 import { AuthService } from './auth.service';
 import type { AuthResult, SafeUser } from './auth.service';
 import { CurrentUser } from './current-user.decorator';
@@ -51,7 +51,7 @@ export class AuthController {
   })
   @ApiOkResponse({ type: MeEntity })
   async me(@CurrentUser() user: SafeUser): Promise<MeEntity> {
-    const integrations = await this.connectionsService.findAll();
+    const integrations = await this.connectionsService.findAll(user.id);
     return { ...user, integrations };
   }
 }
