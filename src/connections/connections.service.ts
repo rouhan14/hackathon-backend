@@ -25,6 +25,7 @@ export interface OAuthStateContext {
   organizationId: string;
   redirectUri: string | null;
   codeVerifier: string | null;
+  metadata: Prisma.JsonValue | null;
 }
 
 export interface SaveConnectionInput {
@@ -40,6 +41,7 @@ export interface SaveConnectionInput {
   refreshTokenEncrypted?: string | null;
   tokenExpiresAt?: Date | null;
   grantedScopes?: string[];
+  credentialGroupId?: string | null;
   metadata?: Prisma.InputJsonValue;
 }
 
@@ -98,6 +100,7 @@ export class ConnectionsService {
         refreshTokenEncrypted: input.refreshTokenEncrypted,
         tokenExpiresAt: input.tokenExpiresAt,
         grantedScopes: input.grantedScopes ?? [],
+        credentialGroupId: input.credentialGroupId,
         metadata: input.metadata,
         status: ConnectionStatus.ACTIVE,
         deletedAt: null,
@@ -123,6 +126,7 @@ export class ConnectionsService {
     redirectUri?: string;
     codeVerifier?: string;
     organizationId?: string;
+    metadata?: Prisma.InputJsonValue;
   }): Promise<void> {
     const organizationId =
       input.organizationId ??
@@ -136,9 +140,30 @@ export class ConnectionsService {
         organizationId,
         redirectUri: input.redirectUri,
         codeVerifier: input.codeVerifier,
+        metadata: input.metadata,
         expiresAt: input.expiresAt,
       },
     });
+  }
+
+  async updateOAuthState(
+    state: string,
+    input: {
+      codeVerifier?: string;
+      metadata?: Prisma.InputJsonValue;
+    },
+  ): Promise<void> {
+    const updated = await this.prisma.oAuthState.updateMany({
+      where: {
+        state,
+        consumedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      data: input,
+    });
+    if (updated.count !== 1) {
+      throw new NotFoundException('OAuth state is invalid or expired.');
+    }
   }
 
   async consumeOAuthState(
@@ -169,8 +194,70 @@ export class ConnectionsService {
         organizationId: record.organizationId,
         redirectUri: record.redirectUri,
         codeVerifier: record.codeVerifier,
+        metadata: record.metadata,
       };
     });
+  }
+
+  async updateOwnedCredentialTokens(
+    userId: string,
+    id: string,
+    input: {
+      accessTokenEncrypted: string;
+      refreshTokenEncrypted?: string | null;
+      tokenExpiresAt?: Date | null;
+      grantedScopes?: string[];
+      metadata?: Prisma.InputJsonValue;
+    },
+  ): Promise<void> {
+    const where = await this.ownedCredentialGroupWhere(userId, id);
+    await this.prisma.integrationConnection.updateMany({
+      where,
+      data: {
+        ...input,
+        status: ConnectionStatus.ACTIVE,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+      },
+    });
+  }
+
+  async markOwnedCredentialReauthRequired(
+    userId: string,
+    id: string,
+    errorCode: string,
+    errorMessage: string,
+  ): Promise<void> {
+    const where = await this.ownedCredentialGroupWhere(userId, id);
+    await this.prisma.integrationConnection.updateMany({
+      where,
+      data: {
+        status: ConnectionStatus.REAUTH_REQUIRED,
+        lastErrorCode: errorCode,
+        lastErrorMessage: errorMessage,
+      },
+    });
+  }
+
+  private async ownedCredentialGroupWhere(
+    userId: string,
+    id: string,
+  ): Promise<Prisma.IntegrationConnectionWhereInput> {
+    const connection = await this.prisma.integrationConnection.findFirst({
+      where: { id, userId, deletedAt: null },
+      select: { provider: true, credentialGroupId: true },
+    });
+    if (!connection) {
+      throw new NotFoundException(`Integration connection "${id}" not found.`);
+    }
+    return connection.credentialGroupId
+      ? {
+          userId,
+          provider: connection.provider,
+          credentialGroupId: connection.credentialGroupId,
+          deletedAt: null,
+        }
+      : { id, userId, deletedAt: null };
   }
 
   private async defaultOrganizationIdForUser(userId: string): Promise<string> {

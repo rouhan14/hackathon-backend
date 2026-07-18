@@ -26,7 +26,7 @@ Chat, dashboards, email reports, and third-party assistants are interfaces to th
 | Background jobs | Redis plus BullMQ | Scheduled briefs, sync, retries, rate-limit handling, and delayed verification |
 | Provider access | REST/webhooks for durable sync; MCP or REST for bounded live reads | Sync must be replayable; live questions benefit from model-selected tools |
 | Hosted remote MCP | Opt-in after security and data-processing review | The inference vendor may handle MCP credentials and tool payloads even when credentials are not visible in model text |
-| AI integration | Internal `ModelProvider` contract using an OpenAI-compatible client | Groq can be used in development and OpenAI can be selected by configuration |
+| AI integration | Internal `ModelProvider` contract using an OpenAI-compatible client | Bedrock Mantle (Gemma) is the first wired provider; Groq/OpenAI remain optional via the same contract |
 | Retrieval | SQL filters and PostgreSQL full-text search first | Most work questions are scoped by user, project, assignee, status, or time |
 | Semantic search | Add embeddings only after evaluation proves a need | Avoid premature infrastructure and cross-tenant retrieval risk |
 | Agent topology | One orchestrator initially | Easier to evaluate, secure, and debug than a hierarchy of agents |
@@ -51,7 +51,7 @@ flowchart TB
     WORKER --> REPORTS["Brief and report generator"]
     WORKER --> ACTIONS["Approved action executor"]
 
-    ASSISTANT --> MODELS["Model provider\nGroq dev / OpenAI prod option"]
+    ASSISTANT --> MODELS["Model provider\nBedrock Mantle / Gemma first"]
     ASSISTANT --> TOOLS["Bounded internal tool registry"]
     TOOLS --> POLICY
     TOOLS --> CONTEXT["Context and evidence services"]
@@ -467,7 +467,7 @@ Exit: a user can search real project context and every result links to its sourc
 
 ### Phase 2 - Build the assistant loop
 
-- Add the configurable model provider layer with Groq for development.
+- Add the configurable model provider layer (Bedrock Mantle / Gemma first; other OpenAI-compatible endpoints later).
 - Implement structured daily briefs and assistant questions.
 - Add the tool registry, evidence validator, run records, and evaluation dataset.
 - Label freshness, unavailable sources, facts, and inferences.
@@ -508,7 +508,7 @@ The recommended defaults are recorded below so implementation can start:
 | Tenant model | Organization plus memberships; integrations personally owned |
 | Source retention | Normalized metadata/evidence retained; sensitive bodies minimized and policy-limited |
 | First write | Approval-gated task comment or status update |
-| Model strategy | Groq through OpenAI-compatible SDK in development; configurable provider in all environments |
+| Model strategy | Bedrock Mantle (Gemma) through OpenAI-compatible SDK; other OpenAI-compatible providers later |
 | Agent strategy | One orchestrator; scheduled workflows reuse the same tools and policy engine |
 | Search | PostgreSQL structured filters and full-text search; evaluate embeddings later |
 | Deployment | API, worker, PostgreSQL, and Redis; no microservices for MVP |

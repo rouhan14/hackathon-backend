@@ -1,0 +1,33 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "codex/add-bedrock-jira-assistant",
+    "feat/unified-brain-assistant",
+    "feature/notion",
+    "main",
+    "merge/clickup",
+    "merge/fix-jira-notion",
+    "merge/jira-notion",
+    "origin"
+  ],
+  "parent": {
+    "codex/add-bedrock-jira-assistant": "main",
+    "feat/unified-brain-assistant": "main",
+    "feature/notion": "main",
+    "main": null,
+    "merge/clickup": "main",
+    "merge/fix-jira-notion": "main",
+    "merge/jira-notion": "main",
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "codex/add-bedrock-jira-assistant",
+    "feat/unified-brain-assistant",
+    "feature/notion",
+    "merge/clickup",
+    "merge/fix-jira-notion",
+    "merge/jira-notion",
+    "origin"
+  ]
+}

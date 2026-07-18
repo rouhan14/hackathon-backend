@@ -5,6 +5,7 @@ import { AgentsModule } from './agents/agents.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AssistantModule } from './assistant/assistant.module';
+import { ToolRegistryModule } from './assistant/tool-registry.module';
 import { AuditModule } from './audit/audit.module';
 import { ConnectionsModule } from './connections/connections.module';
 import { ContextModule } from './context/context.module';
@@ -19,6 +20,7 @@ import { SyncModule } from './sync/sync.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ToolRegistryModule,
     InfrastructureModule,
     IdentityModule,
     ConnectionsModule,
