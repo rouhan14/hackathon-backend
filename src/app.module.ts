@@ -13,6 +13,7 @@ import { HealthModule } from './health/health.module';
 import { IdentityModule } from './identity/identity.module';
 import { InfrastructureModule } from './infrastructure/infrastructure.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { McpModule } from './mcp/mcp.module';
 import { PolicyModule } from './policy/policy.module';
 import { ProvidersModule } from './providers/providers.module';
 import { SyncModule } from './sync/sync.module';
@@ -33,6 +34,7 @@ import { SyncModule } from './sync/sync.module';
     AgentsModule,
     AuditModule,
     NotificationsModule,
+    McpModule,
     HealthModule,
   ],
   controllers: [AppController],
