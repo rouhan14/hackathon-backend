@@ -31,7 +31,11 @@ export class LazyBedrockModelProvider implements ModelProvider {
   }
 
   async toolLoop(request: ToolLoopRequest): Promise<ToolLoopResult> {
-    return this.getDelegate().toolLoop(request);
+    const delegate = this.getDelegate();
+    if (!delegate.toolLoop) {
+      throw new Error('toolLoop not supported by this provider');
+    }
+    return delegate.toolLoop(request);
   }
 
   private getDelegate(): ModelProvider {

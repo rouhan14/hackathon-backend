@@ -40,6 +40,10 @@ export class NotionAssistantService {
   ): Promise<{ message: string }> {
     const messages: ToolModelMessage[] = [{ role: 'user', content: message }];
 
+    if (!this.model.generateWithTools) {
+      throw new Error('Notion assistant requires a model provider with generateWithTools support');
+    }
+
     for (let round = 0; round < 5; round += 1) {
       const result = await this.model.generateWithTools({
         instructions:

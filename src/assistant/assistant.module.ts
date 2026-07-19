@@ -11,7 +11,7 @@ import { JiraAssistantService } from './jira-assistant.service';
 import { NotionAssistantService } from './notion-assistant.service';
 import { LazyBedrockModelProvider } from './lazy-bedrock.model-provider';
 import { GroqModelProvider } from './groq-model-provider';
-import { MODEL_PROVIDER } from './model-provider';
+import { MODEL_PROVIDER, type ModelProvider } from './model-provider';
 import { ToolExecutorService } from './tool-executor.service';
 import { ToolRegistryService } from './tool-registry.service';
 import { ToolRegistryModule } from './tool-registry.module';
@@ -36,13 +36,18 @@ import { ToolRegistryModule } from './tool-registry.module';
     {
       provide: MODEL_PROVIDER,
       useFactory: (config: ConfigService, groq: GroqModelProvider) => {
-        // Use LazyBedrock for Jira (toolLoop), Groq for Notion (generateWithTools)
+        // Create a combined provider that routes to the right implementation
         const bedrock = new LazyBedrockModelProvider(config);
         return {
-          generateStructured: bedrock.generateStructured.bind(bedrock),
-          toolLoop: bedrock.toolLoop.bind(bedrock),
-          generateWithTools: groq.generateWithTools.bind(groq),
-        };
+          generateStructured: <T>(request: any) => bedrock.generateStructured<T>(request),
+          toolLoop: (request: any) => {
+            if (!bedrock.toolLoop) {
+              throw new Error('toolLoop not supported by Bedrock provider');
+            }
+            return bedrock.toolLoop(request);
+          },
+          generateWithTools: (request: any) => groq.generateWithTools(request),
+        } as ModelProvider;
       },
       inject: [ConfigService, GroqModelProvider],
     },
