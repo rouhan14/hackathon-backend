@@ -222,6 +222,18 @@ export class ConnectionsService {
     });
   }
 
+  async updateOwnedCredentialMetadata(
+    userId: string,
+    id: string,
+    metadata: Prisma.InputJsonValue,
+  ): Promise<void> {
+    const where = await this.ownedCredentialGroupWhere(userId, id);
+    await this.prisma.integrationConnection.updateMany({
+      where,
+      data: { metadata },
+    });
+  }
+
   async markOwnedCredentialReauthRequired(
     userId: string,
     id: string,

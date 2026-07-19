@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConnectionsModule } from '../connections/connections.module';
+import { ClickUpAdapter } from './clickup/clickup.adapter';
+import { ClickUpProviderModule } from './clickup/clickup-provider.module';
 import { JiraAdapter } from './jira/jira.adapter';
 import { JiraProviderModule } from './jira/jira-provider.module';
 import { NotionAdapter } from './notion/notion.adapter';
@@ -17,6 +19,7 @@ import {
 @Module({
   imports: [
     ConnectionsModule,
+    ClickUpProviderModule,
     NotionProviderModule,
     JiraProviderModule,
     SlackProviderModule,
@@ -27,12 +30,13 @@ import {
     ProviderRegistry,
     {
       provide: PROVIDER_ADAPTERS,
-      inject: [NotionAdapter, JiraAdapter, SlackAdapter],
+      inject: [NotionAdapter, JiraAdapter, SlackAdapter, ClickUpAdapter],
       useFactory: (
         notion: NotionAdapter,
         jira: JiraAdapter,
         slack: SlackAdapter,
-      ): ProviderAdapter[] => [notion, jira, slack],
+        clickup: ClickUpAdapter,
+      ): ProviderAdapter[] => [notion, jira, slack, clickup],
     },
   ],
   exports: [ProviderRegistry],

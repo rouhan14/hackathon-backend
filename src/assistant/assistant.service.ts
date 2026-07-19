@@ -126,6 +126,7 @@ export function buildAssistantInstructions(
     'Available tools:',
     toolLines,
     'For jira_search, always pass a connectionId from the list and valid JQL (examples: order by updated DESC; assignee = currentUser() ORDER BY updated DESC). Never use jql=true.',
+    'For clickup_search and clickup_get_task, always pass a CLICKUP connectionId from the list. Use clickup_search before clickup_get_task unless the user supplied a task ID.',
     'After tools return, give a concise, useful answer. Prefer bullet lists for multiple items when appropriate.',
   ]
     .filter(Boolean)

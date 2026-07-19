@@ -92,6 +92,7 @@ The basic e2e test replaces the Prisma provider so application composition can b
 - Capability module boilerplate for the remaining product architecture
 - Bedrock Mantle model provider (`generateStructured` + `toolLoop`) for Gemma via env-configured OpenAI-compatible client
 - Authenticated assistant ask endpoint with Jira MCP tool calling (`POST /assistant/ask`)
+- Read-only ClickUp hosted MCP connection, task search, task retrieval, and assistant tools
 
 ### Assistant ask (Jira tool loop)
 
@@ -121,3 +122,23 @@ navigate to the returned `authorizationUrl`. After Atlassian redirects through
 the backend callback, list the user's connections with `GET /integrations` and
 use `POST /integrations/jira/:connectionId/search` for the initial read-only JQL
 slice.
+
+## ClickUp hosted MCP
+
+The backend is an OAuth 2.1/PKCE client of ClickUp's official hosted MCP server;
+it does not operate a separate ClickUp MCP server. ClickUp vets custom-client
+redirect URIs, so configure a stable public HTTPS `CLICKUP_REDIRECT_URI` and
+submit that exact URI to ClickUp before live OAuth acceptance testing.
+
+1. Call `GET /auth/clickup` with the application bearer token and navigate to
+   the returned `authorizationUrl`.
+2. After `?clickup=connected`, refresh `GET /integrations` and select the
+   returned `CLICKUP` connection.
+3. Search with `POST /integrations/clickup/:connectionId/search` and body
+   `{ "query": "blocked tasks assigned to me", "limit": 10 }`.
+4. Retrieve a result with
+   `GET /integrations/clickup/:connectionId/tasks/:taskId`.
+
+Only the discovered workspace-search and task-read tools are bound. The
+backend never proxies arbitrary MCP tool names, and ClickUp create, update,
+comment, bulk, and delete tools remain unavailable in this read-only slice.

@@ -60,6 +60,35 @@ describe('ConnectionsService credential groups', () => {
     );
   });
 
+  it('updates discovered provider metadata without changing credentials', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const prisma = {
+      integrationConnection: {
+        findFirst: jest.fn().mockResolvedValue({
+          provider: ProviderName.CLICKUP,
+          credentialGroupId: null,
+        }),
+        updateMany,
+      },
+    } as unknown as PrismaService;
+    const service = new ConnectionsService(prisma);
+    const metadata = {
+      mcpClientInformationEncrypted: 'encrypted-client',
+      toolBindings: { search: { name: 'search_workspace' } },
+    };
+
+    await service.updateOwnedCredentialMetadata(
+      'user-1',
+      'connection-1',
+      metadata,
+    );
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: 'connection-1', userId: 'user-1', deletedAt: null },
+      data: { metadata },
+    });
+  });
+
   it('marks the entire credential group as requiring reauthorization', async () => {
     const updateMany = jest.fn().mockResolvedValue({ count: 2 });
     const prisma = {
