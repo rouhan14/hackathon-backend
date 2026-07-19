@@ -57,6 +57,10 @@ export class JiraAssistantService {
       `Assistant ask userId=${user.id} tools=${offeredTools.map((t) => t.name).join(',') || 'none'} connections=${usable.length}`,
     );
 
+    if (!this.model.toolLoop) {
+      throw new Error('Jira assistant requires a model provider with toolLoop support');
+    }
+
     const loop = await this.model.toolLoop({
       instructions,
       userMessage: message,

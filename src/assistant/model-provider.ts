@@ -88,8 +88,8 @@ export interface ToolModelResult {
 
 export interface ModelProvider {
   generateStructured<T>(request: ModelRequest): Promise<ModelResult<T>>;
-  toolLoop(request: ToolLoopRequest): Promise<ToolLoopResult>;
-  generateWithTools(request: ToolModelRequest): Promise<ToolModelResult>;
+  toolLoop?(request: ToolLoopRequest): Promise<ToolLoopResult>;
+  generateWithTools?(request: ToolModelRequest): Promise<ToolModelResult>;
 }
 
 export const MODEL_PROVIDER = Symbol('MODEL_PROVIDER');
