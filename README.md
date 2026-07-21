@@ -109,9 +109,13 @@ You'll need a `TOKEN_ENCRYPTION_KEY` (32 random bytes, base64 or 64 hex chars), 
 
 ### Choosing the model (Groq or Bedrock)
 
-Late in the hack we switched the brain's default model. Gemma on Bedrock was doing the job, but it kept mis-formatting tool calls (there's a commit whose message is just "GEMMA IS RETARDED", which tells the story), so we moved the default to Groq, which does native function calling and behaves far better in the tool loop. Both are wired behind the same routing layer, and you pick with one env var.
+A quick note on the models, because it shaped the whole build. As a hackathon team we leaned on what was cheap and free: Groq's free API tier and the Gemma models available to us through AWS Bedrock. Those got us a working product, but they were also the biggest source of friction. When we ran the same prompts through a bigger commercial model like OpenAI's GPT-4o in our test runs, we got clean, reliable tool calls and the answers we actually wanted, pretty much every time. The gap wasn't the prompt or the architecture. It was raw model capability.
 
-Preferred is Groq:
+That same pattern showed up even between our two free options. The Groq model we settled on (`openai/gpt-oss-120b`) is a much larger, 120-billion-parameter model, and it clearly outperformed the small Gemma 3 4B on Bedrock, which kept mis-formatting tool calls and struggling to chain steps. Bigger model, better behavior in the tool loop. So a good chunk of our provider code exists purely to babysit the smaller models: normalizing slightly-wrong argument names, catching malformed tool syntax, and retrying. With a top-tier model, a lot of that defensive code would simply not be needed.
+
+The upside is that the model is swappable by design. Both providers sit behind one routing layer, and you pick with a single env var, so dropping in a stronger model later is a config change, not a rewrite.
+
+Preferred is Groq (the larger, better-behaved of the two free options):
 
 ```bash
 GROQ_API_KEY=gsk_...
@@ -131,6 +135,8 @@ BEDROCK_MODEL_ID=google.gemma-3-4b-it
 ```
 
 Bedrock config is loaded lazily on the first Bedrock call. See `.env.example` for the full IAM-key versus API-key options.
+
+If you have access to a stronger OpenAI-compatible endpoint, point the brain at it and most of the rough edges disappear. The whole system was built to make that a one-line swap.
 
 ### Try the brain
 
