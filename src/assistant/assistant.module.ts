@@ -1,19 +1,21 @@
 import { Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { HttpModule } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
 import { ConnectionsModule } from '../connections/connections.module';
 import { ContextModule } from '../context/context.module';
 import { PolicyModule } from '../policy/policy.module';
 import { ProvidersModule } from '../providers/providers.module';
 import { McpModule } from '../mcp/mcp.module';
 import { AssistantController } from './assistant.controller';
-import { JiraAssistantService } from './jira-assistant.service';
+import { BrainAssistantService } from './brain-assistant.service';
 import { NotionAssistantService } from './notion-assistant.service';
 import { LazyBedrockModelProvider } from './lazy-bedrock.model-provider';
 import { GroqModelProvider } from './groq-model-provider';
-import { MODEL_PROVIDER, type ModelProvider } from './model-provider';
+import { MODEL_PROVIDER } from './model-provider';
 import { ToolExecutorService } from './tool-executor.service';
 import { ToolRegistryModule } from './tool-registry.module';
+import { BrainRunService } from './brain-run.service';
+import { RoutingModelProvider } from './routing-model.provider';
 
 @Module({
   imports: [
@@ -32,30 +34,22 @@ import { ToolRegistryModule } from './tool-registry.module';
     // register tools into the SAME singleton this module consumes. Declaring it
     // locally creates a second, empty instance and the assistant sees no tools.
     ToolExecutorService,
-    JiraAssistantService,
+    BrainRunService,
+    BrainAssistantService,
     NotionAssistantService,
     GroqModelProvider,
     {
+      provide: LazyBedrockModelProvider,
+      useFactory: (config: ConfigService) =>
+        new LazyBedrockModelProvider(config),
+      inject: [ConfigService],
+    },
+    RoutingModelProvider,
+    {
       provide: MODEL_PROVIDER,
-      useFactory: (config: ConfigService, groq: GroqModelProvider) => {
-        // Create a combined provider that routes to the right implementation.
-        const bedrock = new LazyBedrockModelProvider(config);
-        return {
-          generateStructured: <T>(request: any) => bedrock.generateStructured<T>(request),
-          // /assistant/ask (Jira) runs on Bedrock/Gemma via its pseudo-tool loop.
-          toolLoop: (request: any) => {
-            if (!bedrock.toolLoop) {
-              throw new Error('toolLoop not supported by Bedrock provider');
-            }
-            return bedrock.toolLoop(request);
-          },
-          // /assistant/chat (Notion) uses Groq's native function calling.
-          generateWithTools: (request: any) => groq.generateWithTools(request),
-        } as ModelProvider;
-      },
-      inject: [ConfigService, GroqModelProvider],
+      useExisting: RoutingModelProvider,
     },
   ],
-  exports: [MODEL_PROVIDER, JiraAssistantService, NotionAssistantService],
+  exports: [MODEL_PROVIDER, BrainAssistantService, NotionAssistantService],
 })
 export class AssistantModule {}

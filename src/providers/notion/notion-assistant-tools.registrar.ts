@@ -33,9 +33,10 @@ export class NotionAssistantToolsRegistrar implements OnModuleInit {
       name: NOTION_SEARCH_TOOL,
       provider: ProviderName.NOTION,
       description:
-        'Search the user\'s Notion workspace for pages and data sources by title/keywords. Returns matching pages with their page_id. Does not require a connectionId.',
+        "Search the user's Notion workspace for pages and data sources by title/keywords. Returns matching pages with their page_id. Does not require a connectionId.",
       risk: ActionRisk.READ,
       requiredScopes: [],
+      requiresConnectionId: false,
       parameters: {
         type: 'object',
         properties: {
@@ -55,7 +56,8 @@ export class NotionAssistantToolsRegistrar implements OnModuleInit {
       },
       execute: (ctx, args) =>
         this.callNotion(ctx.userId, 'API-post-search', {
-          query: readString(args, ['query', 'q', 'search', 'text', 'title']) ?? '',
+          query:
+            readString(args, ['query', 'q', 'search', 'text', 'title']) ?? '',
           page_size:
             readInt(args, ['page_size', 'pagesize', 'limit', 'size'], 1, 50) ??
             10,
@@ -69,6 +71,7 @@ export class NotionAssistantToolsRegistrar implements OnModuleInit {
         'Read the full content of a Notion page as Markdown. Pass the page_id returned by notion_search. Does not require a connectionId.',
       risk: ActionRisk.READ,
       requiredScopes: [],
+      requiresConnectionId: false,
       parameters: {
         type: 'object',
         properties: {
@@ -100,6 +103,7 @@ export class NotionAssistantToolsRegistrar implements OnModuleInit {
         'Create a new Notion page as a child of an existing page. Provide the parent page_id (from notion_search), a title, and optional text content. Does not require a connectionId.',
       risk: ActionRisk.WRITE,
       requiredScopes: [],
+      requiresConnectionId: false,
       parameters: {
         type: 'object',
         properties: {
@@ -114,7 +118,8 @@ export class NotionAssistantToolsRegistrar implements OnModuleInit {
           },
           content: {
             type: 'string',
-            description: 'Optional page body text (plain text / short markdown).',
+            description:
+              'Optional page body text (plain text / short markdown).',
           },
         },
         required: ['parent_page_id', 'title'],
@@ -215,7 +220,9 @@ export class NotionAssistantToolsRegistrar implements OnModuleInit {
       userId,
       ProviderName.NOTION,
     );
-    const notionToken = this.tokenVault.decrypt(credential.accessTokenEncrypted);
+    const notionToken = this.tokenVault.decrypt(
+      credential.accessTokenEncrypted,
+    );
     const connection = await this.mcp.openConnection({
       headers: { 'Notion-Token': notionToken },
     });
@@ -278,7 +285,8 @@ function nestedParentId(args: Record<string, unknown>): string | undefined {
   const parent = readArg(args, ['parent']);
   if (typeof parent === 'string') return parent;
   if (isRecord(parent)) {
-    const inner = parent.page_id ?? parent.pageId ?? parent.id ?? parent.database_id;
+    const inner =
+      parent.page_id ?? parent.pageId ?? parent.id ?? parent.database_id;
     if (typeof inner === 'string') return inner;
   }
   return undefined;
@@ -302,13 +310,19 @@ function firstNotionPageId(payload: unknown): string | undefined {
 
   // "object":"page", ... "id":"<uuid>"  (id after the type)
   const pageThenId = serialized.match(
-    new RegExp(`"object"\\s*:\\s*"page"[\\s\\S]{0,300}?"id"\\s*:\\s*"(${uuid})"`, 'i'),
+    new RegExp(
+      `"object"\\s*:\\s*"page"[\\s\\S]{0,300}?"id"\\s*:\\s*"(${uuid})"`,
+      'i',
+    ),
   );
   if (pageThenId) return pageThenId[1];
 
   // "id":"<uuid>", ... "object":"page"  (id before the type)
   const idThenPage = serialized.match(
-    new RegExp(`"id"\\s*:\\s*"(${uuid})"[\\s\\S]{0,120}?"object"\\s*:\\s*"page"`, 'i'),
+    new RegExp(
+      `"id"\\s*:\\s*"(${uuid})"[\\s\\S]{0,120}?"object"\\s*:\\s*"page"`,
+      'i',
+    ),
   );
   if (idThenPage) return idThenPage[1];
 
@@ -347,7 +361,9 @@ function extractNotionPayload(result: unknown): unknown {
     return result;
   }
   if (result.isError) {
-    throw new Error(notionErrorText(result) || 'Notion tool returned an error.');
+    throw new Error(
+      notionErrorText(result) || 'Notion tool returned an error.',
+    );
   }
 
   const structured = result.structuredContent;

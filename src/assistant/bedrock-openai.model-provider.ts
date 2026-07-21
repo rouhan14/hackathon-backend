@@ -178,7 +178,7 @@ export class BedrockOpenAIModelProvider implements ModelProvider {
                 ...(run.code ? { code: run.code } : {}),
               };
 
-          toolTraces.push({ name, arguments: args, ok: run.ok });
+          toolTraces.push({ name, arguments: run.arguments, ok: run.ok });
           messages.push({
             role: 'tool',
             tool_call_id: call.id,

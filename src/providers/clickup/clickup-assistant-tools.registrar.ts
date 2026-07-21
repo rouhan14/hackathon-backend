@@ -25,6 +25,7 @@ export class ClickUpAssistantToolsRegistrar implements OnModuleInit {
         'Search tasks in the user-authorized ClickUp workspaces. Always use a ClickUp connectionId from the available connections list.',
       risk: ActionRisk.READ,
       requiredScopes: [],
+      requiresConnectionId: true,
       parameters: {
         type: 'object',
         properties: {
@@ -71,6 +72,7 @@ export class ClickUpAssistantToolsRegistrar implements OnModuleInit {
         'Retrieve one ClickUp task by ID through a user-owned ClickUp connection.',
       risk: ActionRisk.READ,
       requiredScopes: [],
+      requiresConnectionId: true,
       parameters: {
         type: 'object',
         properties: {

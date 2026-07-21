@@ -20,7 +20,7 @@ We were honest with ourselves about hackathon time, so we went deep on one loop 
 
 ### A unified AI "brain" (one endpoint, all apps)
 
-`POST /assistant/brain` is the headline feature. A single Gemma model (via Amazon Bedrock) orchestrating everything:
+`POST /assistant/brain` is the headline feature. A single model orchestrating everything, defaulting to Groq for its tool calling with Amazon Bedrock (Gemma) as the fallback:
 
 - It sees only the tools for apps you've actually connected (connection-scoped tool offering).
 - It can chain tools across providers in one turn, like reading a Notion page and then creating Jira issues from it.
@@ -48,11 +48,11 @@ Reads *and* writes are working. You can search and read across apps, and create 
 
 ### A proper work-graph data model
 
-A roughly 560-line Prisma schema modeling the *real* domain, not just a chat log: organizations, memberships, connections, `SourceObject` (task, document, message, meeting, decision, commitment, and so on), typed `WorkRelation` edges (`blocks`, `depends_on`, `mentions`), `Evidence`, agent definitions and runs, action proposals, approvals, executions, and an immutable audit trail. Even the parts we didn't get to wire up have their schema in place, so the next phase is plumbing, not redesign.
+A Prisma schema modeling the *real* domain, not just a chat log: organizations, memberships, connections, `SourceObject` (task, document, message, meeting, decision, commitment, and so on), typed `WorkRelation` edges (`blocks`, `depends_on`, `mentions`), `Evidence`, agent definitions and runs, action proposals, approvals, executions, and an immutable audit trail. Even the parts we didn't get to wire up have their schema in place, so the next phase is plumbing, not redesign.
 
 ### Model provider abstraction
 
-An internal `ModelProvider` contract with `generateStructured` and `toolLoop`. Bedrock/Gemma is the wired default, but Groq and any OpenAI-compatible endpoint drop in behind the same interface. Config is lazy-loaded on the first call, so the app boots without cloud credentials.
+An internal `ModelProvider` contract with `generateStructured` and `toolLoop`, plus a routing layer that picks the stack per request. Groq is the preferred brain model (it does native function calling, which the tool loop leans on heavily), and Bedrock/Gemma is the fallback, selected with a single `BRAIN_MODEL_PROVIDER` env var (`auto`, `groq`, or `bedrock`). Any OpenAI-compatible endpoint drops in behind the same interface. Config is lazy-loaded on the first call, so the app boots without cloud credentials, and a bad model setting can't break unrelated startup paths.
 
 ## The part we designed but didn't finish: the cron / background-jobs system
 
@@ -107,6 +107,31 @@ npm run start:dev
 
 You'll need a `TOKEN_ENCRYPTION_KEY` (32 random bytes, base64 or 64 hex chars), since OAuth won't complete without it, plus Bedrock credentials for the Gemma model (see `.env.example` for the IAM-key versus Mantle-API-key options). Swagger docs come up with the app.
 
+### Choosing the model (Groq or Bedrock)
+
+Late in the hack we switched the brain's default model. Gemma on Bedrock was doing the job, but it kept mis-formatting tool calls (there's a commit whose message is just "GEMMA IS RETARDED", which tells the story), so we moved the default to Groq, which does native function calling and behaves far better in the tool loop. Both are wired behind the same routing layer, and you pick with one env var.
+
+Preferred is Groq:
+
+```bash
+GROQ_API_KEY=gsk_...
+GROQ_MODEL_NAME=openai/gpt-oss-120b
+# Which stack powers the brain: auto | groq | bedrock
+# BRAIN_MODEL_PROVIDER=auto
+```
+
+With `BRAIN_MODEL_PROVIDER=auto` (the default) the brain uses Groq whenever `GROQ_API_KEY` is set, and falls back to Bedrock otherwise. Set it to `groq` to require Groq, or `bedrock` to force the Gemma path. The choice is resolved per request, so a bad setting can't stop the app from booting.
+
+Bedrock/Gemma is still fully supported as the fallback. Use either an IAM access key (Converse API) or a Bedrock console API key:
+
+```bash
+BEDROCK_API_KEY=...
+BEDROCK_BASE_URL=https://bedrock-mantle.us-east-1.api.aws/v1
+BEDROCK_MODEL_ID=google.gemma-3-4b-it
+```
+
+Bedrock config is loaded lazily on the first Bedrock call. See `.env.example` for the full IAM-key versus API-key options.
+
 ### Try the brain
 
 1. Sign up or log in: `POST /auth/signup`, `POST /auth/login`, then grab the access token.
@@ -122,7 +147,9 @@ Content-Type: application/json
 { "message": "Read my \"Q3 Roadmap\" Notion page and create a Jira task in project ENG for each initiative." }
 ```
 
-The response includes the answer, the exact tool calls the model made, how many rounds it took, and which connections were available, so you can see the brain reasoning across apps.
+The response includes the answer, a `kind` (`answer`, `no_connections`, or `no_tools`), the exact tool calls the model made, how many rounds it took, and which connections were available, so you can see the brain reasoning across apps. You can also pass an optional `sources` array in the body (for example `["JIRA"]`) to hard-limit the brain to specific apps. Every brain call is recorded as a best-effort `AgentRun` (`kind=assistant.brain`) with the model, token counts, and tool trace, and the response carries that `runId`. It's the first thread of the audit trail the architecture calls for, and it never fails the answer if persistence is down.
+
+One migration gotcha: the `architecture_foundation` migration refuses to run if legacy `IntegrationConnection` rows exist, because the old schema never recorded who owned them. Backfill or disconnect those rows first. Existing users are automatically given a private default organization and owner membership.
 
 ### Verify
 
@@ -145,8 +172,8 @@ DELETE /integrations/:id                 Disconnect (wipes encrypted creds)
 GET    /auth/{jira,notion,clickup,slack} Begin OAuth for a provider
 
 POST   /assistant/brain                  Unified cross-app AI (Jira + Notion + ClickUp)
-POST   /assistant/ask                    Jira-focused tool loop
-POST   /assistant/chat                   Notion-focused chat
+POST   /assistant/ask                    Alias of /assistant/brain (kept for older clients)
+POST   /assistant/chat                   Notion-focused chat (deprecated, legacy shape)
 
 GET    /health                           Liveness
 ```

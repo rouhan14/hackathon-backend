@@ -27,6 +27,7 @@ export class JiraAssistantToolsRegistrar implements OnModuleInit {
         'Search Jira issues via an already-connected Jira workspace using JQL. Always pass connectionId from available connections. Use real JQL such as "order by updated DESC" or "assignee = currentUser() ORDER BY updated DESC" — never jql=true.',
       risk: ActionRisk.READ,
       requiredScopes: [JIRA_SEARCH_REQUIRED_SCOPE],
+      requiresConnectionId: true,
       parameters: {
         type: 'object',
         properties: {
@@ -72,6 +73,7 @@ export class JiraAssistantToolsRegistrar implements OnModuleInit {
         'List the Jira projects the user can see for a connected Jira workspace. Use this to find a valid projectKey before creating an issue. Always pass a JIRA connectionId.',
       risk: ActionRisk.READ,
       requiredScopes: [],
+      requiresConnectionId: true,
       parameters: {
         type: 'object',
         properties: {
@@ -85,7 +87,10 @@ export class JiraAssistantToolsRegistrar implements OnModuleInit {
         additionalProperties: false,
       },
       execute: async (ctx, args) => {
-        const connectionId = asNonEmptyString(args.connectionId, 'connectionId');
+        const connectionId = asNonEmptyString(
+          args.connectionId,
+          'connectionId',
+        );
         return this.jira.listProjects(ctx.userId, connectionId);
       },
     });
@@ -97,6 +102,7 @@ export class JiraAssistantToolsRegistrar implements OnModuleInit {
         'Create a new Jira issue (ticket) in a connected Jira workspace. Requires a projectKey (use jira_list_projects if unknown), an issueTypeName such as "Task", "Bug", or "Story", and a summary. Always pass a JIRA connectionId.',
       risk: ActionRisk.WRITE,
       requiredScopes: [],
+      requiresConnectionId: true,
       parameters: {
         type: 'object',
         properties: {
@@ -127,7 +133,10 @@ export class JiraAssistantToolsRegistrar implements OnModuleInit {
         additionalProperties: false,
       },
       execute: async (ctx, args) => {
-        const connectionId = asNonEmptyString(args.connectionId, 'connectionId');
+        const connectionId = asNonEmptyString(
+          args.connectionId,
+          'connectionId',
+        );
         return this.jira.createIssue(ctx.userId, connectionId, {
           projectKey: asNonEmptyString(args.projectKey, 'projectKey'),
           issueTypeName: asNonEmptyString(args.issueTypeName, 'issueTypeName'),
