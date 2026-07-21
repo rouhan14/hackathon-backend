@@ -96,16 +96,37 @@ One thing we'd flag, though: the credits burned fast, faster than we expected, a
 
 ## Running it locally
 
-```bash
+Run these commands in order from the project root. The Notion MCP server runs in a separate terminal and needs your personal Notion token; keep that token in your shell or `.env`, never in this README.
+
+```powershell
+# 1. Install dependencies
 npm install
-cp .env.example .env
+
+# 2. Create and configure your local environment
+Copy-Item .env.example .env
+# Set DATABASE_URL, TOKEN_ENCRYPTION_KEY, JWT_SECRET, and OPENAI_API_KEY in .env.
+
+# 3. Start PostgreSQL
 docker compose up -d postgres
+
+# 4. Create the database schema and Prisma client
 npm exec -- prisma migrate deploy
 npm exec -- prisma generate
+
+# 5. Start the backend
 npm run start:dev
 ```
 
-You'll need a `TOKEN_ENCRYPTION_KEY` (32 random bytes, base64 or 64 hex chars), since OAuth won't complete without it, plus Bedrock credentials for the Gemma model (see `.env.example` for the IAM-key versus Mantle-API-key options). Swagger docs come up with the app.
+In a second terminal, start the local Notion MCP server:
+
+```powershell
+$env:NOTION_MCP_AUTH_TOKEN="your-notion-token"
+npx @notionhq/notion-mcp-server --transport http --port 8080 --auth-token $env:NOTION_MCP_AUTH_TOKEN --enable-token-passthrough
+```
+
+The backend is then available at `http://localhost:5000`; use Swagger to explore the API. You must still configure the OAuth client credentials and redirect URLs for any provider you want to connect.
+
+You'll need a `TOKEN_ENCRYPTION_KEY` (32 random bytes, base64 or 64 hex chars) and `OPENAI_API_KEY`; OAuth integrations additionally need their relevant client credentials. Swagger docs come up with the app.
 
 ### Choosing the model (Groq or Bedrock)
 

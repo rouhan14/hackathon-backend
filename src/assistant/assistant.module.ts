@@ -11,6 +11,7 @@ import { BrainAssistantService } from './brain-assistant.service';
 import { NotionAssistantService } from './notion-assistant.service';
 import { LazyBedrockModelProvider } from './lazy-bedrock.model-provider';
 import { GroqModelProvider } from './groq-model-provider';
+import { OpenAiModelProvider } from './openai-model-provider';
 import { MODEL_PROVIDER } from './model-provider';
 import { ToolExecutorService } from './tool-executor.service';
 import { ToolRegistryModule } from './tool-registry.module';
@@ -38,6 +39,7 @@ import { RoutingModelProvider } from './routing-model.provider';
     BrainAssistantService,
     NotionAssistantService,
     GroqModelProvider,
+    OpenAiModelProvider,
     {
       provide: LazyBedrockModelProvider,
       useFactory: (config: ConfigService) =>

@@ -6,7 +6,7 @@
  *   - groq: require Groq
  *   - bedrock: force Bedrock/Gemma path
  */
-export type BrainModelProviderChoice = 'groq' | 'bedrock';
+export type BrainModelProviderChoice = 'openai' | 'groq' | 'bedrock';
 
 export function resolveBrainToolLoopProvider(config: {
   get: (key: string) => unknown;
@@ -20,6 +20,8 @@ export function resolveBrainToolLoopProvider(config: {
   const groqApiKey = config.get('GROQ_API_KEY');
   const hasGroq =
     typeof groqApiKey === 'string' && groqApiKey.trim().length > 0;
+  const openAiApiKey = config.get('OPENAI_API_KEY');
+  const hasOpenAi = typeof openAiApiKey === 'string' && openAiApiKey.trim().length > 0;
 
   if (raw === 'bedrock') {
     return 'bedrock';
@@ -32,8 +34,12 @@ export function resolveBrainToolLoopProvider(config: {
     }
     return 'groq';
   }
-  if (raw === 'auto') {
-    return hasGroq ? 'groq' : 'bedrock';
+  if (raw === 'openai') {
+    if (!hasOpenAi) throw new Error('BRAIN_MODEL_PROVIDER=openai requires OPENAI_API_KEY to be set.');
+    return 'openai';
   }
-  throw new Error('BRAIN_MODEL_PROVIDER must be one of: auto, groq, bedrock.');
+  if (raw === 'auto') {
+    return hasOpenAi ? 'openai' : hasGroq ? 'groq' : 'bedrock';
+  }
+  throw new Error('BRAIN_MODEL_PROVIDER must be one of: auto, openai, groq, bedrock.');
 }

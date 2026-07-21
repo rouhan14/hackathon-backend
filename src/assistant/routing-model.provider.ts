@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { resolveBrainToolLoopProvider } from './brain-model-routing';
 import { GroqModelProvider } from './groq-model-provider';
+import { OpenAiModelProvider } from './openai-model-provider';
 import { LazyBedrockModelProvider } from './lazy-bedrock.model-provider';
 import { ModelConfigurationException } from './model-errors';
 import type {
@@ -24,6 +25,7 @@ export class RoutingModelProvider implements ModelProvider {
   constructor(
     private readonly config: ConfigService,
     private readonly groq: GroqModelProvider,
+    private readonly openai: OpenAiModelProvider,
     private readonly bedrock: LazyBedrockModelProvider,
   ) {}
 
@@ -42,9 +44,9 @@ export class RoutingModelProvider implements ModelProvider {
           : 'Brain model routing is invalid.',
       );
     }
-    return choice === 'groq'
-      ? this.groq.toolLoop(request)
-      : this.bedrock.toolLoop(request);
+    return choice === 'openai'
+      ? this.openai.toolLoop(request)
+      : choice === 'groq' ? this.groq.toolLoop(request) : this.bedrock.toolLoop(request);
   }
 
   generateWithTools(request: ToolModelRequest): Promise<ToolModelResult> {

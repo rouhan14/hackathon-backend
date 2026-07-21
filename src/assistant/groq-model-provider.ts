@@ -70,14 +70,17 @@ const DEFAULT_TOOL_ROUNDS = 5;
 
 @Injectable()
 export class GroqModelProvider implements ModelProvider {
+  protected providerConfig: 'groq' | 'openai' = 'groq';
   constructor(
     private readonly http: HttpService,
     private readonly config: ConfigService,
   ) {}
+  protected get apiKeyName() { return this.providerConfig === 'openai' ? 'OPENAI_API_KEY' : 'GROQ_API_KEY'; }
+  protected get modelName() { return this.providerConfig === 'openai' ? 'OPENAI_MODEL_NAME' : 'GROQ_MODEL_NAME'; }
 
   async generateStructured<T>(request: ModelRequest): Promise<ModelResult<T>> {
-    const apiKey = this.requiredConfig('GROQ_API_KEY');
-    const model = this.requiredConfig('GROQ_MODEL_NAME');
+    const apiKey = this.requiredConfig(this.apiKeyName);
+    const model = this.resolveModel();
 
     const data = await this.createCompletion<GroqResponse>(apiKey, {
       model,
@@ -104,7 +107,7 @@ export class GroqModelProvider implements ModelProvider {
 
     return {
       output,
-      provider: 'groq',
+      provider: this.providerConfig,
       model,
       promptTokens: data.usage?.prompt_tokens,
       outputTokens: data.usage?.completion_tokens,
@@ -118,8 +121,8 @@ export class GroqModelProvider implements ModelProvider {
    * round budget is exhausted.
    */
   async toolLoop(request: ToolLoopRequest): Promise<ToolLoopResult> {
-    const apiKey = this.requiredConfig('GROQ_API_KEY');
-    const model = this.requiredConfig('GROQ_MODEL_NAME');
+    const apiKey = this.requiredConfig(this.apiKeyName);
+    const model = this.resolveModel();
     const maxRounds = Math.min(
       Math.max(request.maxRounds ?? DEFAULT_TOOL_ROUNDS, 1),
       10,
@@ -171,7 +174,7 @@ export class GroqModelProvider implements ModelProvider {
         }
         return {
           answer,
-          provider: 'groq',
+          provider: this.providerConfig,
           model,
           toolCalls: toolTraces,
           rounds,
@@ -245,7 +248,7 @@ export class GroqModelProvider implements ModelProvider {
     }
     return {
       answer,
-      provider: 'groq',
+        provider: this.providerConfig,
       model,
       toolCalls: toolTraces,
       rounds,
@@ -255,8 +258,8 @@ export class GroqModelProvider implements ModelProvider {
   }
 
   async generateWithTools(request: ToolModelRequest): Promise<ToolModelResult> {
-    const apiKey = this.requiredConfig('GROQ_API_KEY');
-    const model = this.requiredConfig('GROQ_MODEL_NAME');
+    const apiKey = this.requiredConfig(this.apiKeyName);
+    const model = this.resolveModel();
     const data = await this.createCompletion<GroqToolResponse>(apiKey, {
       model,
       messages: [
@@ -321,6 +324,13 @@ export class GroqModelProvider implements ModelProvider {
     return value;
   }
 
+  private resolveModel(): string {
+    if (this.providerConfig === 'openai') {
+      return String(this.config.get('OPENAI_MODEL_NAME') ?? 'gpt-4o-mini').trim();
+    }
+    return this.requiredConfig(this.modelName);
+  }
+
   private async createCompletion<T>(
     apiKey: string,
     body: Record<string, unknown>,
@@ -328,7 +338,7 @@ export class GroqModelProvider implements ModelProvider {
     try {
       const response = await firstValueFrom(
         this.http.post<T>(
-          'https://api.groq.com/openai/v1/chat/completions',
+          this.providerConfig === 'openai' ? 'https://api.openai.com/v1/chat/completions' : 'https://api.groq.com/openai/v1/chat/completions',
           body,
           {
             headers: {
