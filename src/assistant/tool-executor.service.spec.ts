@@ -24,6 +24,7 @@ describe('ToolExecutorService', () => {
         provider: ProviderName.JIRA,
         risk: ActionRisk.READ,
         requiredScopes: ['search:jira-work'],
+        requiresConnectionId: true,
         execute,
       }),
     } as unknown as ToolRegistryService;
@@ -66,7 +67,11 @@ describe('ToolExecutorService', () => {
       connectionId: 'c1',
       jql: 'x',
     });
-    expect(result).toEqual({ ok: true, data: { issues: [1] } });
+    expect(result).toEqual({
+      ok: true,
+      data: { issues: [1] },
+      arguments: { connectionId: 'c1', jql: 'x' },
+    });
   });
 
   it('returns ok false when handler throws', async () => {
@@ -77,7 +82,11 @@ describe('ToolExecutorService', () => {
       connectionId: 'c1',
       jql: 'x',
     });
-    expect(result).toEqual({ ok: false, error: 'MCP down' });
+    expect(result).toEqual({
+      ok: false,
+      error: 'MCP down',
+      arguments: { connectionId: 'c1', jql: 'x' },
+    });
   });
 
   it('returns ok false when required scopes are missing', async () => {
@@ -114,7 +123,11 @@ describe('ToolExecutorService', () => {
       connectionId: 'c1',
       jql: 'order by updated DESC',
     });
-    expect(result).toEqual({ ok: true, data: { issues: [] } });
+    expect(result).toEqual({
+      ok: true,
+      data: { issues: [] },
+      arguments: { connectionId: 'c1', jql: 'order by updated DESC' },
+    });
     expect(execute).toHaveBeenCalled();
   });
 
@@ -126,6 +139,88 @@ describe('ToolExecutorService', () => {
         jql: 'x',
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('auto-injects connectionId when the user has exactly one matching connection', async () => {
+    const execute = jest.fn().mockResolvedValue({ issues: [] });
+    const registry = {
+      has: jest.fn().mockReturnValue(true),
+      get: jest.fn().mockReturnValue({
+        name: 'jira_search',
+        provider: ProviderName.JIRA,
+        risk: ActionRisk.READ,
+        requiredScopes: ['search:jira-work'],
+        requiresConnectionId: true,
+        parameters: {
+          type: 'object',
+          properties: {
+            connectionId: { type: 'string' },
+            jql: { type: 'string' },
+          },
+          required: ['connectionId', 'jql'],
+        },
+        execute,
+      }),
+    } as unknown as ToolRegistryService;
+    const policy = {
+      evaluateAction: jest.fn().mockReturnValue({
+        allowed: true,
+        requiresApproval: false,
+        reason: 'ok',
+      }),
+    } as unknown as PolicyEngineService;
+    const findAll = jest.fn().mockResolvedValue([
+      {
+        id: 'only-jira',
+        provider: ProviderName.JIRA,
+        status: 'ACTIVE',
+        grantedScopes: ['search:jira-work'],
+      },
+    ]);
+    const findOne = jest.fn().mockResolvedValue({
+      id: 'only-jira',
+      provider: ProviderName.JIRA,
+      grantedScopes: ['search:jira-work'],
+    });
+    const connections = {
+      findAll,
+      findOne,
+    } as unknown as ConnectionsService;
+
+    const executor = new ToolExecutorService(registry, policy, connections);
+    const result = await executor.execute(
+      'u1',
+      'jira_search',
+      { jql: 'order by updated DESC' },
+      {
+        connections: [
+          {
+            id: 'only-jira',
+            provider: ProviderName.JIRA,
+            status: 'ACTIVE',
+            grantedScopes: ['search:jira-work'],
+          },
+        ] as never,
+      },
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      data: { issues: [] },
+      arguments: {
+        connectionId: 'only-jira',
+        jql: 'order by updated DESC',
+      },
+    });
+    expect(execute).toHaveBeenCalledWith(
+      { userId: 'u1' },
+      expect.objectContaining({
+        connectionId: 'only-jira',
+        jql: 'order by updated DESC',
+      }),
+    );
+    expect(findAll).not.toHaveBeenCalled();
+    expect(findOne).not.toHaveBeenCalled();
   });
 
   it('maps handler ForbiddenException (MCP/tool permission) to ok false, not HTTP abort', async () => {

@@ -29,7 +29,9 @@ export interface ToolLoopRequest {
   /** Max model→tool→model rounds. Default 5. */
   maxRounds?: number;
   /**
-   * Must return a ToolRunResult (never throw for tool/MCP failures).
+   * Must return a ToolRunResult with the arguments actually executed (never
+   * throw for tool/MCP failures). Providers record those resolved arguments in
+   * traces so server-side defaults remain observable.
    * Policy denials may still throw ForbiddenException to abort the request.
    */
   executeTool: (

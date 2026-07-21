@@ -1,5 +1,15 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, MaxLength, MinLength } from 'class-validator';
+import { ProviderName } from '@prisma/client';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  ArrayNotEmpty,
+  ArrayUnique,
+  IsArray,
+  IsEnum,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class AskDto {
   @ApiProperty({
@@ -10,4 +20,18 @@ export class AskDto {
   @MinLength(1)
   @MaxLength(4000)
   message: string;
+
+  @ApiPropertyOptional({
+    enum: ProviderName,
+    isArray: true,
+    example: [ProviderName.JIRA],
+    description:
+      'Optional hard filter. Only tools for these connected providers are offered to the model.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayUnique()
+  @IsEnum(ProviderName, { each: true })
+  sources?: ProviderName[];
 }

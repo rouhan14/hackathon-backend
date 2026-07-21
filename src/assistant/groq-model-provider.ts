@@ -1,7 +1,16 @@
 import { HttpService } from '@nestjs/axios';
-import { Injectable } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { isAxiosError } from 'axios';
 import { firstValueFrom } from 'rxjs';
+import {
+  ModelAuthException,
+  ModelConfigurationException,
+  ModelNotAvailableException,
+  ModelResponseParseException,
+  ModelTimeoutException,
+  ModelUpstreamException,
+} from './model-errors';
 import {
   ModelProvider,
   ModelRequest,
@@ -14,7 +23,7 @@ import {
 } from './model-provider';
 import { boundSerializeForModel } from './tool-result';
 
-interface GroqResponse<T> {
+interface GroqResponse {
   choices: Array<{
     message: {
       content: string;
@@ -66,55 +75,51 @@ export class GroqModelProvider implements ModelProvider {
     private readonly config: ConfigService,
   ) {}
 
-  async generateStructured<T>(
-    request: ModelRequest,
-  ): Promise<ModelResult<T>> {
-    const apiKey = this.config.getOrThrow<string>('GROQ_API_KEY');
-    const model = this.config.getOrThrow<string>('GROQ_MODEL_NAME');
+  async generateStructured<T>(request: ModelRequest): Promise<ModelResult<T>> {
+    const apiKey = this.requiredConfig('GROQ_API_KEY');
+    const model = this.requiredConfig('GROQ_MODEL_NAME');
 
-    const response = await firstValueFrom(
-      this.http.post<GroqResponse<T>>(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
-          model,
-          messages: [
-            { role: 'system', content: request.instructions },
-            { role: 'user', content: JSON.stringify(request.input) },
-          ],
-          response_format: { type: 'json_object' },
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-        },
-      ),
-    );
+    const data = await this.createCompletion<GroqResponse>(apiKey, {
+      model,
+      messages: [
+        { role: 'system', content: request.instructions },
+        { role: 'user', content: JSON.stringify(request.input) },
+      ],
+      response_format: { type: 'json_object' },
+    });
 
-    const content = response.data.choices[0]?.message.content;
+    const content = data.choices[0]?.message.content;
     if (!content) {
-      throw new Error('Groq returned an empty model response');
+      throw new ModelResponseParseException(
+        'Groq returned an empty model response.',
+      );
+    }
+
+    let output: T;
+    try {
+      output = JSON.parse(content) as T;
+    } catch {
+      throw new ModelResponseParseException();
     }
 
     return {
-      output: JSON.parse(content) as T,
+      output,
       provider: 'groq',
       model,
-      promptTokens: response.data.usage?.prompt_tokens,
-      outputTokens: response.data.usage?.completion_tokens,
+      promptTokens: data.usage?.prompt_tokens,
+      outputTokens: data.usage?.completion_tokens,
     };
   }
 
   /**
-   * Native OpenAI-style tool loop for the Jira assistant (/assistant/ask).
+   * Native OpenAI-style tool loop for the unified brain.
    * Groq models (e.g. openai/gpt-oss-120b) support real function calling, so we
    * loop model→tool→model until the model returns a final text answer or the
    * round budget is exhausted.
    */
   async toolLoop(request: ToolLoopRequest): Promise<ToolLoopResult> {
-    const apiKey = this.config.getOrThrow<string>('GROQ_API_KEY');
-    const model = this.config.getOrThrow<string>('GROQ_MODEL_NAME');
+    const apiKey = this.requiredConfig('GROQ_API_KEY');
+    const model = this.requiredConfig('GROQ_MODEL_NAME');
     const maxRounds = Math.min(
       Math.max(request.maxRounds ?? DEFAULT_TOOL_ROUNDS, 1),
       10,
@@ -140,38 +145,29 @@ export class GroqModelProvider implements ModelProvider {
 
     for (let round = 0; round < maxRounds; round += 1) {
       rounds = round + 1;
-      const response = await firstValueFrom(
-        this.http.post<GroqToolResponse>(
-          'https://api.groq.com/openai/v1/chat/completions',
-          {
-            model,
-            messages,
-            ...(tools.length
-              ? { tools, tool_choice: 'auto' as const }
-              : {}),
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${apiKey}`,
-              'Content-Type': 'application/json',
-            },
-          },
-        ),
-      );
+      const data = await this.createCompletion<GroqToolResponse>(apiKey, {
+        model,
+        messages,
+        ...(tools.length ? { tools, tool_choice: 'auto' as const } : {}),
+      });
 
-      promptTokens += response.data.usage?.prompt_tokens ?? 0;
-      outputTokens += response.data.usage?.completion_tokens ?? 0;
+      promptTokens += data.usage?.prompt_tokens ?? 0;
+      outputTokens += data.usage?.completion_tokens ?? 0;
 
-      const message = response.data.choices[0]?.message;
+      const message = data.choices[0]?.message;
       if (!message) {
-        throw new Error('Groq returned an empty model response');
+        throw new ModelResponseParseException(
+          'Groq returned an empty model response.',
+        );
       }
 
       const toolCalls = message.tool_calls ?? [];
       if (!toolCalls.length) {
         const answer = message.content?.trim() ?? '';
         if (!answer) {
-          throw new Error('Groq returned an empty answer');
+          throw new ModelResponseParseException(
+            'Groq returned an empty answer.',
+          );
         }
         return {
           answer,
@@ -218,7 +214,7 @@ export class GroqModelProvider implements ModelProvider {
         const payload = run.ok
           ? run.data
           : { error: run.error, ...(run.code ? { code: run.code } : {}) };
-        toolTraces.push({ name, arguments: args, ok: run.ok });
+        toolTraces.push({ name, arguments: run.arguments, ok: run.ok });
         messages.push({
           role: 'tool',
           tool_call_id: call.id,
@@ -233,27 +229,18 @@ export class GroqModelProvider implements ModelProvider {
       content:
         'Stop calling tools. Provide your best final answer using only the tool results already available.',
     });
-    const finalResponse = await firstValueFrom(
-      this.http.post<GroqToolResponse>(
-        'https://api.groq.com/openai/v1/chat/completions',
-        { model, messages },
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-        },
-      ),
-    );
+    const finalData = await this.createCompletion<GroqToolResponse>(apiKey, {
+      model,
+      messages,
+    });
     rounds += 1;
-    promptTokens += finalResponse.data.usage?.prompt_tokens ?? 0;
-    outputTokens += finalResponse.data.usage?.completion_tokens ?? 0;
+    promptTokens += finalData.usage?.prompt_tokens ?? 0;
+    outputTokens += finalData.usage?.completion_tokens ?? 0;
 
-    const answer =
-      finalResponse.data.choices[0]?.message?.content?.trim() ?? '';
+    const answer = finalData.choices[0]?.message?.content?.trim() ?? '';
     if (!answer) {
-      throw new Error(
-        'Groq returned an empty answer after the tool budget was exhausted',
+      throw new ModelResponseParseException(
+        'Groq returned an empty answer after the tool budget was exhausted.',
       );
     }
     return {
@@ -267,66 +254,125 @@ export class GroqModelProvider implements ModelProvider {
     };
   }
 
-  async generateWithTools(
-    request: ToolModelRequest,
-  ): Promise<ToolModelResult> {
-    const apiKey = this.config.getOrThrow<string>('GROQ_API_KEY');
-    const model = this.config.getOrThrow<string>('GROQ_MODEL_NAME');
-    const response = await firstValueFrom(
-      this.http.post<GroqToolResponse>(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
-          model,
-          messages: [
-            { role: 'system', content: request.instructions },
-            ...request.messages.map((message) => {
-              if (message.role === 'assistant') {
-                return {
-                  role: 'assistant',
-                  content: message.content,
-                  tool_calls: (message.toolCalls ?? []).map((call) => ({
-                    id: call.id,
-                    type: 'function',
-                    function: {
-                      name: call.name,
-                      arguments: JSON.stringify(call.arguments),
-                    },
-                  })),
-                };
-              }
-              if (message.role === 'tool') {
-                return {
-                  role: 'tool',
-                  content: message.content,
-                  tool_call_id: message.toolCallId,
-                };
-              }
-              return { role: 'user', content: message.content };
-            }),
-          ],
-          tools: request.tools.map((tool) => ({
-            type: 'function',
-            function: {
-              name: tool.name,
-              description: tool.description,
-              parameters: tool.inputSchema,
-            },
-          })),
-          tool_choice: 'auto',
+  async generateWithTools(request: ToolModelRequest): Promise<ToolModelResult> {
+    const apiKey = this.requiredConfig('GROQ_API_KEY');
+    const model = this.requiredConfig('GROQ_MODEL_NAME');
+    const data = await this.createCompletion<GroqToolResponse>(apiKey, {
+      model,
+      messages: [
+        { role: 'system', content: request.instructions },
+        ...request.messages.map((message) => {
+          if (message.role === 'assistant') {
+            return {
+              role: 'assistant',
+              content: message.content,
+              tool_calls: (message.toolCalls ?? []).map((call) => ({
+                id: call.id,
+                type: 'function',
+                function: {
+                  name: call.name,
+                  arguments: JSON.stringify(call.arguments),
+                },
+              })),
+            };
+          }
+          if (message.role === 'tool') {
+            return {
+              role: 'tool',
+              content: message.content,
+              tool_call_id: message.toolCallId,
+            };
+          }
+          return { role: 'user', content: message.content };
+        }),
+      ],
+      tools: request.tools.map((tool) => ({
+        type: 'function',
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.inputSchema,
         },
-        { headers: { Authorization: `Bearer ${apiKey}` } },
-      ),
-    );
+      })),
+      tool_choice: 'auto',
+    });
 
-    const message = response.data.choices[0]?.message;
-    if (!message) throw new Error('Groq returned an empty model response');
+    const message = data.choices[0]?.message;
+    if (!message) {
+      throw new ModelResponseParseException(
+        'Groq returned an empty model response.',
+      );
+    }
     return {
       content: message.content ?? '',
       toolCalls: (message.tool_calls ?? []).map((call) => ({
         id: call.id,
         name: call.function.name,
-        arguments: JSON.parse(call.function.arguments) as Record<string, unknown>,
+        arguments: parseToolArguments(call.function.arguments),
       })),
     };
+  }
+
+  private requiredConfig(key: string): string {
+    const value = String(this.config.get(key) ?? '').trim();
+    if (!value) {
+      throw new ModelConfigurationException(`${key} must be set.`);
+    }
+    return value;
+  }
+
+  private async createCompletion<T>(
+    apiKey: string,
+    body: Record<string, unknown>,
+  ): Promise<T> {
+    try {
+      const response = await firstValueFrom(
+        this.http.post<T>(
+          'https://api.groq.com/openai/v1/chat/completions',
+          body,
+          {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+          },
+        ),
+      );
+      return response.data;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      if (isAxiosError(error)) {
+        const status = error.response?.status;
+        if (status === 401 || status === 403) {
+          throw new ModelAuthException('Groq authentication failed.');
+        }
+        if (status === 404) {
+          throw new ModelNotAvailableException(
+            'The configured Groq model is not available.',
+          );
+        }
+        if (
+          status === 408 ||
+          status === 504 ||
+          error.code === 'ECONNABORTED' ||
+          error.code === 'ETIMEDOUT'
+        ) {
+          throw new ModelTimeoutException();
+        }
+      }
+      throw new ModelUpstreamException('Groq request failed.');
+    }
+  }
+}
+
+function parseToolArguments(text: string): Record<string, unknown> {
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    throw new ModelResponseParseException(
+      'Groq returned tool arguments that were not valid JSON.',
+    );
   }
 }
