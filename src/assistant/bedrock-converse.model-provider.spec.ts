@@ -48,10 +48,15 @@ describe('BedrockConverseModelProvider', () => {
       });
 
     const client = { send } as never;
-    const executeTool = jest.fn().mockResolvedValue({
-      ok: true,
-      data: { issues: [{ key: 'A-1' }] },
-    });
+    const executeTool = jest
+      .fn()
+      .mockImplementation((_name, args: Record<string, unknown>) =>
+        Promise.resolve({
+          ok: true,
+          data: { issues: [{ key: 'A-1' }] },
+          arguments: args,
+        }),
+      );
 
     const provider = new BedrockConverseModelProvider(
       { ...config, modelId: 'anthropic.claude-3-haiku-20240307-v1:0' },
@@ -174,10 +179,15 @@ describe('BedrockConverseModelProvider', () => {
         usage: { inputTokens: 20, outputTokens: 8 },
       });
 
-    const executeTool = jest.fn().mockResolvedValue({
-      ok: true,
-      data: { issues: [{ key: 'WORK-9' }] },
-    });
+    const executeTool = jest
+      .fn()
+      .mockImplementation((_name, args: Record<string, unknown>) =>
+        Promise.resolve({
+          ok: true,
+          data: { issues: [{ key: 'WORK-9' }] },
+          arguments: args,
+        }),
+      );
 
     const provider = new BedrockConverseModelProvider(config, {
       send,
@@ -232,10 +242,15 @@ describe('BedrockConverseModelProvider', () => {
         usage: { inputTokens: 10, outputTokens: 4 },
       });
 
-    const executeTool = jest.fn().mockResolvedValue({
-      ok: true,
-      data: { issues: [{ key: 'WORK-1' }] },
-    });
+    const executeTool = jest
+      .fn()
+      .mockImplementation((_name, args: Record<string, unknown>) =>
+        Promise.resolve({
+          ok: true,
+          data: { issues: [{ key: 'WORK-1' }] },
+          arguments: args,
+        }),
+      );
 
     const provider = new BedrockConverseModelProvider(config, {
       send,

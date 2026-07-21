@@ -221,7 +221,11 @@ export class BedrockConverseModelProvider implements ModelProvider {
                   ...(run.code ? { code: run.code } : {}),
                 };
 
-            toolTraces.push({ name, arguments: args, ok: run.ok });
+            toolTraces.push({
+              name,
+              arguments: run.arguments,
+              ok: run.ok,
+            });
             this.logger.log(
               `Executed tool ${name} ok=${run.ok} (native toolUse)`,
             );
@@ -285,14 +289,14 @@ export class BedrockConverseModelProvider implements ModelProvider {
                 };
             toolTraces.push({
               name: call.name,
-              arguments: call.arguments,
+              arguments: run.arguments,
               ok: run.ok,
             });
             this.logger.log(
               `Executed tool ${call.name} ok=${run.ok} (server-side tool fallback)`,
             );
             resultLines.push(
-              `Tool ${call.name}(${JSON.stringify(call.arguments)}) => ${boundSerializeForModel(payload)}`,
+              `Tool ${call.name}(${JSON.stringify(run.arguments)}) => ${boundSerializeForModel(payload)}`,
             );
           }
 

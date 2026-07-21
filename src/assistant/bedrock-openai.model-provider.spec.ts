@@ -206,10 +206,15 @@ describe('BedrockOpenAIModelProvider', () => {
         usage: { prompt_tokens: 40, completion_tokens: 12 },
       });
 
-    const executeTool = jest.fn().mockResolvedValue({
-      ok: true,
-      data: { issues: [{ key: 'A-1' }] },
-    });
+    const executeTool = jest
+      .fn()
+      .mockImplementation((_name, args: Record<string, unknown>) =>
+        Promise.resolve({
+          ok: true,
+          data: { issues: [{ key: 'A-1' }] },
+          arguments: args,
+        }),
+      );
     const provider = new BedrockOpenAIModelProvider(config, mockClient(create));
 
     const result = await provider.toolLoop({
@@ -297,10 +302,19 @@ describe('BedrockOpenAIModelProvider', () => {
           parameters: { type: 'object', properties: {} },
         },
       ],
-      executeTool: () => Promise.resolve({ ok: false, error: 'boom' }),
+      executeTool: (_name, args) =>
+        Promise.resolve({
+          ok: false,
+          error: 'boom',
+          arguments: { ...args, connectionId: 'server-resolved' },
+        }),
     });
 
     expect(result.toolCalls[0]?.ok).toBe(false);
+    expect(result.toolCalls[0]?.arguments).toEqual({
+      connectionId: 'server-resolved',
+      jql: 'x',
+    });
     expect(result.answer).toBe('Jira search failed.');
     expect(create).toHaveBeenCalledTimes(2);
   });

@@ -146,7 +146,7 @@ export class ConnectionsService {
   }): Promise<void> {
     const organizationId =
       input.organizationId ??
-      (await this.defaultOrganizationIdForUser(input.userId));
+      (await this.findDefaultOrganizationIdForUser(input.userId));
 
     await this.prisma.oAuthState.create({
       data: {
@@ -288,7 +288,7 @@ export class ConnectionsService {
       : { id, userId, deletedAt: null };
   }
 
-  private async defaultOrganizationIdForUser(userId: string): Promise<string> {
+  async findDefaultOrganizationIdForUser(userId: string): Promise<string> {
     const membership = await this.prisma.membership.findFirst({
       where: { userId },
       select: { organizationId: true },
