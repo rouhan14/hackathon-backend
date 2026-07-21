@@ -64,6 +64,61 @@ export class AssistantController {
     return this.jiraAssistant.ask(user, dto.message);
   }
 
+  @Post('brain')
+  @ApiOperation({
+    summary:
+      'Unified AI brain (Gemma). One endpoint that works across all connected apps — Jira, Notion, and ClickUp — and can chain tools in a single request (e.g. read a Notion page, then create Jira tickets from it).',
+  })
+  @ApiBody({
+    type: AskDto,
+    examples: {
+      readJira: {
+        summary: 'Read Jira',
+        value: { message: 'What Jira tickets do I have in progress right now?' },
+      },
+      readNotion: {
+        summary: 'Read Notion',
+        value: { message: 'Read my "Q3 Roadmap" page in Notion and summarize it.' },
+      },
+      crossApp: {
+        summary: 'Cross-app (Notion → Jira)',
+        value: {
+          message:
+            'Read my "Q3 Roadmap" Notion page and create a Jira task in project ENG for each initiative listed.',
+        },
+      },
+    },
+  })
+  @ApiOkResponse({
+    schema: {
+      example: {
+        answer:
+          'Your Notion page "Q3 Roadmap" lists 3 initiatives. You currently have 2 in-progress Jira tickets: ...',
+        provider: 'bedrock',
+        model: 'google.gemma-3-4b-it',
+        toolCalls: [
+          { name: 'notion_search', arguments: { query: 'Q3 Roadmap' }, ok: true },
+          {
+            name: 'jira_search',
+            arguments: {
+              connectionId: 'conn_123',
+              jql: 'assignee = currentUser() AND statusCategory = "In Progress"',
+            },
+            ok: true,
+          },
+        ],
+        rounds: 3,
+        availableConnections: [],
+      },
+    },
+  })
+  brain(
+    @CurrentUser() user: SafeUser,
+    @Body() dto: AskDto,
+  ): Promise<AssistantAskResult> {
+    return this.jiraAssistant.ask(user, dto.message);
+  }
+
   @Post('chat')
   @ApiOperation({
     summary: 'Send a message to the AI assistant (Notion).',

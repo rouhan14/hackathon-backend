@@ -8,6 +8,10 @@ export const ATLASSIAN_ACCESSIBLE_RESOURCES_TOOL =
 
 export const ATLASSIAN_JIRA_SEARCH_TOOL = 'searchJiraIssuesUsingJql';
 
+/** Atlassian Rovo MCP tool names for Jira writes / discovery. */
+export const ATLASSIAN_JIRA_CREATE_ISSUE_TOOL = 'createJiraIssue';
+export const ATLASSIAN_JIRA_GET_PROJECTS_TOOL = 'getVisibleJiraProjects';
+
 export const JIRA_REAUTH_REQUIRED_CODE = 'JIRA_REAUTH_REQUIRED';
 
 export const JIRA_NO_ACCESSIBLE_SITES_CODE = 'JIRA_NO_ACCESSIBLE_SITES';

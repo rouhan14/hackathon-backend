@@ -19,6 +19,8 @@ import { TokenVaultService } from '../../connections/token-vault.service';
 import {
   ATLASSIAN_ACCESSIBLE_RESOURCES_URL,
   ATLASSIAN_ACCESSIBLE_RESOURCES_TOOL,
+  ATLASSIAN_JIRA_CREATE_ISSUE_TOOL,
+  ATLASSIAN_JIRA_GET_PROJECTS_TOOL,
   ATLASSIAN_JIRA_SEARCH_TOOL,
   ATLASSIAN_ROVO_MCP_URL,
   JIRA_OAUTH_STATE_TTL_MS,
@@ -362,6 +364,149 @@ export class JiraMcpService {
     } finally {
       await client.close().catch(() => undefined);
     }
+  }
+
+  /** List Jira projects the user can see (to resolve a projectKey before create). */
+  async listProjects(userId: string, connectionId: string): Promise<unknown> {
+    const { client, transport, connection } = this.prepareAuthedClient(
+      userId,
+      await this.connections.findOwnedCredential(userId, connectionId),
+    );
+    try {
+      await client.connect(transport);
+      const result = await client.callTool({
+        name: ATLASSIAN_JIRA_GET_PROJECTS_TOOL,
+        arguments: { cloudId: connection.workspaceId },
+      });
+      if (result.isError) {
+        throw new BadGatewayException(
+          extractMcpErrorText(result) || 'Jira rejected the projects request.',
+        );
+      }
+      return extractToolPayload(result) ?? result;
+    } catch (error) {
+      throw await this.mapMcpError(error, userId, connectionId, 'projects list');
+    } finally {
+      await client.close().catch(() => undefined);
+    }
+  }
+
+  /** Create a Jira issue via the Atlassian Rovo MCP createJiraIssue tool. */
+  async createIssue(
+    userId: string,
+    connectionId: string,
+    input: {
+      projectKey: string;
+      issueTypeName: string;
+      summary: string;
+      description?: string;
+    },
+  ): Promise<unknown> {
+    const { client, transport, connection } = this.prepareAuthedClient(
+      userId,
+      await this.connections.findOwnedCredential(userId, connectionId),
+    );
+    try {
+      await client.connect(transport);
+      this.logger.log(
+        `Jira MCP create issue cloudId=${connection.workspaceId} project=${input.projectKey} type=${input.issueTypeName}`,
+      );
+      const result = await client.callTool({
+        name: ATLASSIAN_JIRA_CREATE_ISSUE_TOOL,
+        arguments: {
+          cloudId: connection.workspaceId,
+          projectKey: input.projectKey,
+          issueTypeName: input.issueTypeName,
+          summary: input.summary,
+          ...(input.description ? { description: input.description } : {}),
+        },
+      });
+      if (result.isError) {
+        const detail = extractMcpErrorText(result);
+        this.logger.warn(
+          `Jira MCP create issue rejected cloudId=${connection.workspaceId} detail=${detail}`,
+        );
+        throw new BadGatewayException(
+          detail
+            ? `Jira rejected the create request: ${detail}`
+            : 'Jira rejected the create request.',
+        );
+      }
+      return extractToolPayload(result) ?? result;
+    } catch (error) {
+      throw await this.mapMcpError(error, userId, connectionId, 'create issue');
+    } finally {
+      await client.close().catch(() => undefined);
+    }
+  }
+
+  /** Build an authenticated (but not yet connected) Jira MCP client for writes. */
+  private prepareAuthedClient(
+    userId: string,
+    connection: Awaited<ReturnType<ConnectionsService['findOwnedCredential']>>,
+  ): {
+    client: Client;
+    transport: StreamableHTTPClientTransport;
+    connection: Awaited<ReturnType<ConnectionsService['findOwnedCredential']>>;
+  } {
+    if (connection.provider !== ProviderName.JIRA) {
+      throw new BadRequestException('The selected connection is not Jira.');
+    }
+    if (!connection.workspaceId) {
+      throw new BadRequestException('The Jira connection has no cloudId.');
+    }
+    const metadata = readConnectionMetadata(connection.metadata);
+    const clientInformation = this.decryptClientInformation(
+      metadata.mcpClientInformationEncrypted,
+    );
+    const provider = new JiraOAuthClientProvider({
+      redirectUrl: this.redirectUri,
+      state: randomUUID(),
+      clientInformation,
+      tokens: this.tokensFromConnection(connection, metadata),
+      onTokens: async (tokens) => {
+        await this.connections.updateOwnedCredentialTokens(
+          userId,
+          connection.id,
+          this.tokenUpdate(tokens),
+        );
+      },
+      onRedirect: async () => {
+        await this.markReauthRequired(userId, connection.id);
+        throw new JiraReauthRequiredException();
+      },
+    });
+    return {
+      client: this.createClient(),
+      transport: this.createTransport(provider),
+      connection,
+    };
+  }
+
+  private async mapMcpError(
+    error: unknown,
+    userId: string,
+    connectionId: string,
+    action: string,
+  ): Promise<Error> {
+    if (
+      error instanceof BadGatewayException ||
+      error instanceof BadRequestException ||
+      error instanceof JiraReauthRequiredException
+    ) {
+      return error;
+    }
+    if (error instanceof UnauthorizedError) {
+      await this.markReauthRequired(userId, connectionId);
+      return new JiraReauthRequiredException();
+    }
+    this.logger.error(
+      `Jira MCP ${action} failed connectionId=${connectionId}: ${errorMessage(error)}`,
+      error instanceof Error ? error.stack : undefined,
+    );
+    return new BadGatewayException(
+      `The Jira ${action} request failed: ${errorMessage(error)}`,
+    );
   }
 
   private createClient(): Client {

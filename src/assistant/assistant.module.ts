@@ -13,7 +13,6 @@ import { LazyBedrockModelProvider } from './lazy-bedrock.model-provider';
 import { GroqModelProvider } from './groq-model-provider';
 import { MODEL_PROVIDER, type ModelProvider } from './model-provider';
 import { ToolExecutorService } from './tool-executor.service';
-import { ToolRegistryService } from './tool-registry.service';
 import { ToolRegistryModule } from './tool-registry.module';
 
 @Module({
@@ -28,7 +27,10 @@ import { ToolRegistryModule } from './tool-registry.module';
   ],
   controllers: [AssistantController],
   providers: [
-    ToolRegistryService,
+    // ToolRegistryService is intentionally NOT declared here. It comes from the
+    // @Global() ToolRegistryModule so provider modules (Jira, ClickUp, ...)
+    // register tools into the SAME singleton this module consumes. Declaring it
+    // locally creates a second, empty instance and the assistant sees no tools.
     ToolExecutorService,
     JiraAssistantService,
     NotionAssistantService,
@@ -36,22 +38,24 @@ import { ToolRegistryModule } from './tool-registry.module';
     {
       provide: MODEL_PROVIDER,
       useFactory: (config: ConfigService, groq: GroqModelProvider) => {
-        // Create a combined provider that routes to the right implementation
+        // Create a combined provider that routes to the right implementation.
         const bedrock = new LazyBedrockModelProvider(config);
         return {
           generateStructured: <T>(request: any) => bedrock.generateStructured<T>(request),
+          // /assistant/ask (Jira) runs on Bedrock/Gemma via its pseudo-tool loop.
           toolLoop: (request: any) => {
             if (!bedrock.toolLoop) {
               throw new Error('toolLoop not supported by Bedrock provider');
             }
             return bedrock.toolLoop(request);
           },
+          // /assistant/chat (Notion) uses Groq's native function calling.
           generateWithTools: (request: any) => groq.generateWithTools(request),
         } as ModelProvider;
       },
       inject: [ConfigService, GroqModelProvider],
     },
   ],
-  exports: [MODEL_PROVIDER, JiraAssistantService, NotionAssistantService, ToolRegistryService],
+  exports: [MODEL_PROVIDER, JiraAssistantService, NotionAssistantService],
 })
 export class AssistantModule {}
