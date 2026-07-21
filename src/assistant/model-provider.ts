@@ -54,9 +54,42 @@ export interface ToolLoopResult {
   outputTokens?: number;
 }
 
+// Notion MCP-specific interfaces
+export interface ToolModelRequest {
+  instructions: string;
+  messages: ToolModelMessage[];
+  tools: ToolModelDefinition[];
+}
+
+export interface ToolModelMessage {
+  role: 'user' | 'assistant' | 'tool';
+  content: string;
+  toolCallId?: string;
+  toolName?: string;
+  toolCalls?: ToolCall[];
+}
+
+export interface ToolModelDefinition {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+export interface ToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
+export interface ToolModelResult {
+  content: string;
+  toolCalls: ToolCall[];
+}
+
 export interface ModelProvider {
   generateStructured<T>(request: ModelRequest): Promise<ModelResult<T>>;
-  toolLoop(request: ToolLoopRequest): Promise<ToolLoopResult>;
+  toolLoop?(request: ToolLoopRequest): Promise<ToolLoopResult>;
+  generateWithTools?(request: ToolModelRequest): Promise<ToolModelResult>;
 }
 
 export const MODEL_PROVIDER = Symbol('MODEL_PROVIDER');
