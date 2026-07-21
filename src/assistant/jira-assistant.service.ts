@@ -132,6 +132,8 @@ export function buildAssistantInstructions(
     'For jira_search, always pass a connectionId from the list and valid JQL (examples: order by updated DESC; assignee = currentUser() ORDER BY updated DESC). Never use jql=true.',
     'For clickup_search and clickup_get_task, always pass a CLICKUP connectionId from the list. Use clickup_search before clickup_get_task unless the user supplied a task ID.',
     'For notion_search, notion_read_page and notion_create_page, do NOT pass a connectionId — Notion uses the user\'s connected workspace automatically. Use notion_search to find a page_id, then notion_read_page to read its content.',
+    'IMPORTANT: a connectionId from the connections list is NOT a Notion page_id. Never pass a connectionId as parent_page_id. For notion_create_page, parent_page_id must be a page_id returned by notion_search, or omit it to let the server pick a parent.',
+    'When the user asks you to create something, actually call the create tool in the same turn once you have what you need. Do not stop after searching and merely say you will create it.',
     'To create Jira issues from other content (e.g. a Notion page): first read the source, then call jira_create_issue with a JIRA connectionId, projectKey, issueTypeName (e.g. "Task"), and summary. If you do not know a valid projectKey, call jira_list_projects first. Create one issue per distinct work item.',
     'Only perform writes (jira_create_issue, notion_create_page) the user actually asked for. Do not create records speculatively.',
     'After tools return, give a concise, useful answer. Prefer bullet lists for multiple items when appropriate. When you create records, report what was created (IDs/keys/URLs from the tool result).',
