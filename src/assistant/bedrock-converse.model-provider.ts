@@ -152,7 +152,14 @@ export class BedrockConverseModelProvider implements ModelProvider {
       request.instructions,
       supportsNativeTools
         ? 'When you need live data, use the platform tools via the API tool-calling channel. Never write fake tool syntax in your answer.'
-        : 'Native tool calling is unavailable for this model. When live data is needed, emit exactly one available tool call as tool_name({"argument":"value"}) and do not claim to have results before the server returns them.',
+        : [
+            'Native tool calling is unavailable for this model.',
+            'When you need live data or must act, reply with ONLY a single tool call and nothing else.',
+            'Write the REAL tool name (from the Available tools list) directly, followed by JSON arguments. For example:',
+            'jira_search({"connectionId": "<id>", "jql": "key = ABC-1"})',
+            'Do NOT write the literal words "tool_name", "tool_call", or "invoke", and do NOT wrap the tool name inside another function call.',
+            'Do not claim to have results before the server returns them.',
+          ].join('\n'),
       'After tools return results, answer the user with concrete data only.',
     ].join('\n');
 
@@ -454,6 +461,10 @@ function stripPseudoToolNarration(text: string): string {
     .replace(/```\s*tool_code[\s\S]*?```/gi, '')
     .replace(/```[\s\S]*?\bjira_search\s*\([\s\S]*?```/gi, '')
     .replace(/\bjira_search\s*\([^)]*\)\s*/gi, '')
+    .replace(
+      /\b(?:tool_name|tool_call|toolcall|use_tool|run_tool|call_tool|execute_tool|invoke)\s*\([\s\S]*?\)\s*/gi,
+      '',
+    )
     .trim();
 }
 

@@ -9,6 +9,18 @@ export interface PseudoToolCall {
   arguments: Record<string, unknown>;
 }
 
+/** Placeholder/wrapper words small models emit around the real tool name. */
+const WRAPPER_KEYWORDS = [
+  'tool_name',
+  'tool_call',
+  'toolcall',
+  'use_tool',
+  'run_tool',
+  'call_tool',
+  'execute_tool',
+  'invoke',
+] as const;
+
 /**
  * Parse text for calls like:
  *   jira_search(connectionId='…', jql='…')
@@ -67,6 +79,48 @@ export function parsePseudoToolCalls(
     }
   }
 
+  // Wrapper form: small models often literally emit the placeholder word, e.g.
+  //   tool_name(jira_search, {"jql":"..."})
+  //   tool_call(name="jira_search", arguments={...})
+  //   invoke(jira_search, {...})
+  for (const keyword of WRAPPER_KEYWORDS) {
+    const lowerText = text.toLowerCase();
+    let searchFrom = 0;
+    while (searchFrom < text.length) {
+      const idx = lowerText.indexOf(keyword, searchFrom);
+      if (idx < 0) {
+        break;
+      }
+      const before = idx === 0 ? ' ' : text[idx - 1];
+      if (/[a-zA-Z0-9_]/.test(before)) {
+        searchFrom = idx + keyword.length;
+        continue;
+      }
+      let j = idx + keyword.length;
+      while (j < text.length && /\s/.test(text[j])) {
+        j += 1;
+      }
+      if (text[j] !== '(') {
+        searchFrom = idx + keyword.length;
+        continue;
+      }
+      const close = findMatchingParen(text, j);
+      if (close < 0) {
+        searchFrom = idx + keyword.length;
+        continue;
+      }
+      const call = parseWrappedCall(text.slice(j + 1, close), allowed);
+      if (call) {
+        const key = `${call.name}:${JSON.stringify(call.arguments)}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          found.push(call);
+        }
+      }
+      searchFrom = close + 1;
+    }
+  }
+
   // JSON-ish: {"name":"jira_search","arguments":{...}}
   const jsonRe =
     /\{\s*"(?:name|tool)"\s*:\s*"([^"]+)"\s*,\s*"(?:arguments|parameters|input)"\s*:\s*(\{[\s\S]*?\})\s*\}/g;
@@ -93,6 +147,65 @@ export function parsePseudoToolCalls(
   return found;
 }
 
+/**
+ * Parse the inside of a wrapper call like `jira_search, {json}` or
+ * `name="jira_search", arguments={json}` into a real tool call, if the resolved
+ * name is allowed.
+ */
+function parseWrappedCall(
+  inside: string,
+  allowed: Map<string, string>,
+): PseudoToolCall | null {
+  const parts = splitTopLevelCommas(inside);
+  if (parts.length === 0) {
+    return null;
+  }
+
+  let rawName: string | undefined;
+  let argsPart: string | undefined;
+
+  for (const part of parts) {
+    const trimmed = part.trim();
+    const eq = trimmed.indexOf('=');
+    const colon = trimmed.indexOf(':');
+    const sep = eq >= 0 && (colon < 0 || eq < colon) ? eq : colon;
+    if (sep > 0 && !trimmed.startsWith('{')) {
+      const key = trimmed.slice(0, sep).trim().replace(/^["']|["']$/g, '').toLowerCase();
+      const value = trimmed.slice(sep + 1).trim();
+      if (['name', 'tool', 'tool_name', 'function'].includes(key)) {
+        rawName = unquote(value);
+        continue;
+      }
+      if (
+        ['arguments', 'args', 'parameters', 'params', 'input'].includes(key)
+      ) {
+        argsPart = value;
+        continue;
+      }
+      // Some other kwarg — treat the whole wrapper as positional args below.
+    }
+    if (rawName === undefined) {
+      rawName = unquote(trimmed);
+    } else if (argsPart === undefined) {
+      argsPart = trimmed;
+    }
+  }
+
+  if (!rawName) {
+    return null;
+  }
+  const canonical = allowed.get(rawName.toLowerCase());
+  if (!canonical) {
+    return null;
+  }
+  const args = argsPart ? parseCallArguments(argsPart) : {};
+  return { name: canonical, arguments: args };
+}
+
+function unquote(value: string): string {
+  return value.trim().replace(/^["'`]|["'`]$/g, '');
+}
+
 function parseCallArguments(raw: string): Record<string, unknown> {
   const trimmed = raw.trim();
   if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
@@ -114,6 +227,9 @@ export function looksLikePseudoToolNarration(text: string): boolean {
     /```\s*tool_code/i.test(text) ||
     /\btool_code\b/i.test(text) ||
     /\bjira_search\s*\(/i.test(text) ||
+    /\b(?:tool_name|tool_call|toolcall|use_tool|run_tool|call_tool|execute_tool)\s*\(/i.test(
+      text,
+    ) ||
     /I'll use the .+ tool/i.test(text)
   );
 }
