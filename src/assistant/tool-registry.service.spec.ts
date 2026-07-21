@@ -12,6 +12,7 @@ function tool(name: string, provider: ProviderName): AssistantTool {
     description: `${name} tool`,
     risk: ActionRisk.READ,
     requiredScopes: [],
+    requiresConnectionId: false,
     parameters: { type: 'object', properties: {} },
     execute: () => Promise.resolve({}),
   };

@@ -37,9 +37,22 @@ npm run start:dev
 
 Generate `TOKEN_ENCRYPTION_KEY` as 32 random bytes encoded as base64 or 64 hexadecimal characters. Provider OAuth cannot complete without it.
 
-### Model provider (Amazon Bedrock / Gemma)
+### Model provider (brain / ask)
 
-The assistant uses Bedrock with **either**:
+`POST /assistant/brain` (and its alias `/assistant/ask`) use a **tool loop** across connected apps (Jira, Notion, ClickUp).
+
+**Preferred: Groq** (native function calling). Set:
+
+```bash
+GROQ_API_KEY=gsk_...
+GROQ_MODEL_NAME=openai/gpt-oss-120b
+# Optional override: auto | groq | bedrock
+# BRAIN_MODEL_PROVIDER=auto
+```
+
+With `BRAIN_MODEL_PROVIDER=auto` (default), brain uses Groq whenever `GROQ_API_KEY` is set.
+
+**Fallback: Amazon Bedrock** (used when Groq is not configured, or `BRAIN_MODEL_PROVIDER=bedrock`):
 
 **A) IAM access keys (Converse API)** — use this if you have an `AKIA…` access key:
 
@@ -63,7 +76,7 @@ BEDROCK_BASE_URL=https://bedrock-mantle.us-east-1.api.aws/v1
 BEDROCK_MODEL_ID=google.gemma-3-4b-it
 ```
 
-Enable the Gemma model in the Bedrock console for that region. Config is loaded lazily on the first model call.
+Bedrock config is loaded lazily on the first Bedrock model call. `POST /assistant/chat` (Notion-focused) continues to use Groq via `generateWithTools`.
 
 The `architecture_foundation` migration refuses to continue if legacy `IntegrationConnection` rows exist because the old schema did not record their user owner. Backfill or disconnect those rows before applying the migration. Existing users are automatically assigned a private default organization and owner membership.
 
@@ -90,13 +103,15 @@ The basic e2e test replaces the Prisma provider so application composition can b
 - Approval policy baseline that blocks destructive actions
 - Initial work graph, evidence, agent, report, action, and audit schema
 - Capability module boilerplate for the remaining product architecture
-- Bedrock Mantle model provider (`generateStructured` + `toolLoop`) for Gemma via env-configured OpenAI-compatible client
-- Authenticated assistant ask endpoint with Jira MCP tool calling (`POST /assistant/ask`)
+- Groq (preferred) or Bedrock model provider for the multi-app brain tool loop
+- Authenticated unified brain: `POST /assistant/brain` (alias: `/assistant/ask`)
+- Jira / Notion / ClickUp assistant tools via shared registry + MCP
 - Read-only ClickUp hosted MCP connection, task search, task retrieval, and assistant tools
+- Best-effort `AgentRun` persistence for brain calls (`kind=assistant.brain`)
 
-### Assistant ask (Jira tool loop)
+### Assistant brain (multi-app tool loop)
 
-1. Connect Jira: `GET /auth/jira` with a bearer token, complete OAuth.
+1. Connect Jira (and/or Notion, ClickUp): `GET /auth/jira` with a bearer token, complete OAuth.
 2. Confirm the connection: `GET /integrations`.
 3. Ask:
 

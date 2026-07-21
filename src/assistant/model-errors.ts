@@ -28,6 +28,16 @@ export class ModelNotAvailableException extends ServiceUnavailableException {
   }
 }
 
+/** Required model configuration is missing or internally inconsistent. */
+export class ModelConfigurationException extends ServiceUnavailableException {
+  constructor(message = 'Model provider configuration is invalid.') {
+    super({
+      code: 'MODEL_CONFIGURATION_ERROR',
+      message,
+    });
+  }
+}
+
 /** Upstream model API returned an unexpected or unusable response. */
 export class ModelUpstreamException extends BadGatewayException {
   constructor(message = 'Model provider request failed.') {

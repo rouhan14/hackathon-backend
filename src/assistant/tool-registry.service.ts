@@ -16,6 +16,8 @@ export interface AssistantTool {
    * in tool arguments (when that field is used).
    */
   requiredScopes: string[];
+  /** Executor metadata; never inferred from the model-facing JSON schema. */
+  requiresConnectionId: boolean;
   /** JSON Schema object for the tool arguments (OpenAI tools format). */
   parameters: Record<string, unknown>;
   /**
